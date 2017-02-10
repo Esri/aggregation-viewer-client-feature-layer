@@ -118,7 +118,7 @@
       var startTimeSlider = true;
       var minValue;
       var maxValue;
-      var FSInfo;
+      var ignoreChangeEvent = false;
 
       //#############################################################################################
       // Map Related functions
@@ -146,9 +146,9 @@
       //### Issue new query on extent-change if live mode is disabled ###
 
       map.on("extent-change", function (evt) {
-        if (map.getLayer("FSAggregations") && live == false) {
+        if (map.getLayer("FSAggregations") && !ignoreChangeEvent && live == false) {
           getFSAggregation();
-        }
+        };
       });
 
       //#############################################################################################
@@ -161,7 +161,7 @@
         getLayerTimeInfo();
         setTimeout(function () {
           addAggregationLayer();
-        }, 1000)
+        }, 1000);
       });
       on(dojo.byId("heatmap"), "change", toggleHeatmap);
       on(dojo.byId("refreshMode"), "change", toggleMode);
@@ -195,6 +195,7 @@
             initTimeSlider();
             startTimeSlider = false;
           } else if (startTimeSlider == false) {
+            ignoreChangeEvent = true;
             updateTimeSlider();
           };
         };
@@ -204,6 +205,14 @@
         if (dojo.byId("heatmap").checked == true) {
           dojo.byId("radius").style.visibility = "visible";
           var layer = map.getLayer("heatmap");
+          var minIsFinit = isFinite(minValue);
+          var maxIsFinit = isFinite(maxValue);
+          if (!minIsFinit) {
+            minValue = 0;
+          }
+          if (!maxIsFinit) {
+            maxValue = 1;
+          }
           layer.renderer.setMinPixelIntensity(minValue);
           layer.renderer.setMaxPixelIntensity(maxValue);
         } else {
@@ -342,8 +351,8 @@
               .setOutline(
                 new SimpleLineSymbol().setColor(new Color([99, 99, 99, 1])).setWidth(0.3)
               );
-          }
-          classColorInfo = []
+          };
+          classColorInfo = [];
 
           //Define breaks and color
           var renderer = new ClassBreaksRenderer({
@@ -469,7 +478,7 @@
         } else {
           var start = 0;
           var end = new Date().getTime();
-        }
+        };
         var ext = encodeURIComponent(JSON.stringify(map.extent.toJson()));
         var lod = dojo.byId("lod").value;
         var style = dojo.byId("aggStyle").value;
@@ -484,7 +493,7 @@
         //Construct URL for aggregation query
         var url = dojo.byId("inputUrl").value;
         url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true&geometryType=esriGeometryEnvelope&geometry=" + ext + "&time=" + start + "," + end + "&f=pjson";
-        console.log(url)
+        console.log(url);
         return url;
       }
 
@@ -497,27 +506,27 @@
         });
         request.then(
           function (response) {
-            console.log(response)
+            console.log(response);
             var count = [];
             //Create graphics from response features
             var features = arr.map(response.features, function (feature, i) {
-                var newFeature = {},
-                  geometry,
-                  attributes = {};
+                var newFeature = {};
+                var geometry;
+                var attributes = {};
                 count.push(feature.attributes.Count);
                 geometry = new Polygon(feature.geometry)
                 if (!geometry.hasOwnProperty('spatialReference') || !geometry['spatialReference']) {
                   geometry['spatialReference'] = sr;
-                }
+                };
                 if (dojo.byId("heatmap").checked == true) {
                   geometry = geometry.getCentroid();
-                }
-                var newFeature = new Graphic(geometry, null, feature.attributes, null);
+                };
+                newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
               })
               //Calculate min/max count value to adjust renderer
-            var maxValue = Math.max.apply(null, count);
-            var minValue = Math.min.apply(null, count);
+            maxValue = Math.max.apply(null, count);
+            minValue = Math.min.apply(null, count);
             //Add features to respective layer and adjust renderer
             if (dojo.byId("heatmap").checked == true) {
               var layer = map.getLayer("heatmap");
@@ -533,7 +542,7 @@
             layer.applyEdits(features, null, null)
               .then(function () {
                 layer.refresh();
-              })
+              });
           },
           function (error) {
             console.log("Error querying the aggregations: ", error.message);
@@ -558,11 +567,13 @@
         timeSlider.setThumbMovingRate(2000);
         timeSlider.startup();
         timeSlider.on("time-extent-change", function () {
+          if (!ignoreChangeEvent) {
             timePara = timeSlider.getCurrentTimeExtent();
             getFSAggregation();
-          })
-          //add labels for every other time stop
-        var labels = createLabels()
+          };
+        });
+        //add labels for every other time stop
+        var labels = createLabels();
         timeSlider.setLabels(labels);
       }
 
@@ -574,30 +585,32 @@
           timeSlider.startup();
           map.setTimeSlider(timeSlider);
           //add labels for every other time stop
-          var labels = createLabels()
+          var labels = createLabels();
           timeSlider.setLabels(labels);
           domStyle.set(dom.byId('timeSlider'), "display", 'block');
+          getFSAggregation();
+          ignoreChangeEvent = false;
         }, 1000);
-      }
+      };
 
       //Timeslider labels
       function createLabels() {
         var labels = array.map(timeSlider.timeStops, function (timeStop, i) {
           if (i % 2 === 0) {
             if (timeStop.getHours() < 10) {
-              var hours = "0" + timeStop.getHours()
+              var hours = "0" + timeStop.getHours();
             } else {
-              var hours = timeStop.getHours()
+              var hours = timeStop.getHours();
             };
             if (timeStop.getMinutes() < 10) {
-              var minutes = "0" + timeStop.getMinutes()
+              var minutes = "0" + timeStop.getMinutes();
             } else {
-              var minutes = timeStop.getMinutes()
+              var minutes = timeStop.getMinutes();
             };
             if (timeStop.getSeconds() < 10) {
-              var seconds = "0" + timeStop.getSeconds()
+              var seconds = "0" + timeStop.getSeconds();
             } else {
-              var seconds = timeStop.getSeconds()
+              var seconds = timeStop.getSeconds();
             };
             var month = timeStop.getMonth() + 1;
             var day = timeStop.getDate();
@@ -605,9 +618,9 @@
             return month + "/" + day + "<br>" + hours + ":" + minutes + ":" + seconds;
           } else {
             return "";
-          }
-        })
-        return labels
+          };
+        });
+        return labels;
       }
 
       function autoUpdate() {
@@ -616,8 +629,8 @@
           if (live) {
             autoUpdate();
           };
-        }, 2000)
-      }
+        }, 2000);
+      };
 
     });
   </script>
