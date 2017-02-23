@@ -2,6 +2,14 @@
 
 Sample JavaScript Feature and Map Service Layer Aggregation Viewer, using aggregation (lod) queries against Feature or Map Service Layers, aggregating features server side, returning aggregated bins (polygon features) and rendering those aggregation bins client side.
 
+Client side rendering based on server side Flat Hexagon aggregation:
+
+![App](client-flat-hexagon.png?raw=true)
+
+Client side Heat Map rendering based on server side Flat Hexagon aggregation:
+
+![alt text](client-flat-hexagon-heat-map.png?raw=true)
+
 
 ## Issues
 
