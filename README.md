@@ -6,6 +6,14 @@ Client side rendering based on server side Flat Hexagon aggregation:
 
 ![App](client-flat-hexagon.png?raw=true)
 
+Client side rendering based on server side Square aggregation:
+
+![alt text](client-square.png?raw=true)
+
+Client side rendering based on server side Flat Triangle aggregation:
+
+![alt text](client-flat-triangle.png?raw=true)
+
 Client side Heat Map rendering based on server side Flat Hexagon aggregation:
 
 ![alt text](client-flat-hexagon-heat-map.png?raw=true)

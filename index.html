@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+
 <!--
   Copyright 1995-2017 Esri
 
@@ -27,60 +29,19 @@
 <head lang="en">
   <meta charset="UTF-8">
   <title>Aggregation Viewer - Client Side Feature Layer</title>
-  <link rel="stylesheet" href="https://js.arcgis.com/3.19/dijit/themes/claro/claro.css">
   <link rel="stylesheet" href="https://js.arcgis.com/3.19/esri/css/esri.css">
+  <link rel="stylesheet" href="./flat/flat.css">
 
-  <style type="text/css">
-    html,
-    body {
-      height: 100%;
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      font-family: sans-serif;
-      font-size: 12px;
-    }
-    
-    #map {
-      height: -moz-calc(100% - 190px);
-      height: -webkit-calc(100% - 190px);
-      height: calc(100% - 190px);
-      width: 100%;
-      z-index: -1;
-    }
-    
-    #controls {
-      position: absolute;
-      bottom: 0px;
-      width: 100%;
-      height: 180px;
-      background: rgba(255, 255, 255, 0);
-      padding: 2px 0px;
-      white-space: nowrap;
-      color: #6f6e6e;
-    }
-    
-    .settingsTable {
-      border-color: rgba(255, 255, 255, 0.6);
-      font-family: sans-serif;
-      font-size: 12px;
-      color: #6f6e6e;
-      text-align: left;
-      overflow: left;
-      width: 100%;
-      vertical-align: text-top;
-    }
-    
-    .settingsTable td {
-      vertical-align: top;
-      padding: 1px 2px;
-    }
-  </style>
+  <link rel="stylesheet" href="./styles.css">
+
+  <script src="https://use.fontawesome.com/9482a0b1d1.js"></script>
   <script src="https://js.arcgis.com/3.19/"></script>
   <script>
     require([
+      "dojo/parser",
       "dojo/dom",
       "dojo/dom-style",
+      "dojo/dom-class",
       "dojo/on",
       "dojo/json",
       "dojo/_base/array",
@@ -106,9 +67,22 @@
       "esri/renderers/HeatmapRenderer",
       "esri/renderers/ClassBreaksRenderer",
 
+      "dijit/TooltipDialog",
+      "dijit/form/DropDownButton",
+
       "dojo/_base/array",
       "dojo/domReady!"
-    ], function (dom, domStyle, on, JSON, arr, Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent, FeatureLayer, LabelClass, SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon, TimeSlider, HeatmapRenderer, ClassBreaksRenderer, array) {
+    ], function (
+      parser, dom, domStyle, domClass, on, JSON, arr,
+      Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
+      FeatureLayer, LabelClass,
+      SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
+      TimeSlider,
+      HeatmapRenderer, ClassBreaksRenderer,
+      TooltipDialog, DropDownButton,
+      array) {
+
+      parser.parse();
 
       //### global variables ###
       var map;
@@ -169,6 +143,11 @@
       on(dojo.byId("aggStyle"), "change", toggleRefresh);
       on(dojo.byId("lod"), "change", toggleRefresh);
       on(dojo.byId("blurRadius"), "change", toggleRefresh);
+      on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
+
+      function togglePanel() {
+        domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
+      }
 
       //### Switch change functions ###
 
@@ -198,12 +177,13 @@
             ignoreChangeEvent = true;
             updateTimeSlider();
           };
+          domStyle.set(dom.byId('timeSlider'), "display", 'block');
         };
       };
 
       function toggleHeatmap(evt) {
         if (dojo.byId("heatmap").checked == true) {
-          dojo.byId("radius").style.visibility = "visible";
+          dojo.byId("radius").style.display = "inherit";
           var layer = map.getLayer("heatmap");
           var minIsFinit = isFinite(minValue);
           var maxIsFinit = isFinite(maxValue);
@@ -216,7 +196,7 @@
           layer.renderer.setMinPixelIntensity(minValue);
           layer.renderer.setMaxPixelIntensity(maxValue);
         } else {
-          dojo.byId("radius").style.visibility = "hidden";
+          dojo.byId("radius").style.display = "none";
         }
         getFSAggregation();
       }
@@ -469,7 +449,7 @@
 
       //#############################################################################################
       // BDS FS Aggregation Query
-      //############################################################################################# 
+      //#############################################################################################
       function constructURL() {
         //Get parameters from UI
         if (replay) {
@@ -636,82 +616,91 @@
   </script>
 </head>
 
-<body>
+<body class="flat">
   <div id="map"></div>
+  <div id="timeSlider"></div>
   <div id="controls">
-    <div style="margin-left: 10px;">
-      <b>Service URL:</b>
-      <input type="text" id="inputUrl" value="http://storm.esri.com:6080/arcgis/rest/services/faa-4326-hex-flat/MapServer/0" style="width: 700px; margin-bottom: 5px" />
-      <input type="button" class="button" id="addFSLayer" value="Add Layer" />
-      <table id="settingsTable" class="settingsTable">
-        <th>Aggregation Settings</th>
-        <tr>
-          <td>
-            <table class="settingsTable">
-              <tr>
-                <td>LOD:</td>
-                <td>
-                  <input type="number" id="lod" value="3" style="width: 50px;" />
-                </td>
-              </tr>
-              <tr>
-                <td>Auto LOD offset:</td>
-                <td>
-                  <input type="checkbox" id="autoOffSet" checked="true" />
-                </td>
-              </tr>
-
-            </table>
-          </td>
-          <td>
-            <table class="settingsTable">
-              <tr>
-                <td>GeoHash Style:</td>
-                <td>
-                  <select name="aggStyle" id="aggStyle" style="width: 120px;">
-                    <option value="geohash">GeoHash</option>
-                    <option value="square">Square</option>
-                    <option value="flatHexagon">Flat Hexagon</option>
-                    <option value="pointyHexagon">Pointy Hexagon</option>
-                    <option value="flatTriangle">Flat Triangle</option>
-                    <option value="pointyTriangle">Pointy Triangle</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Heatmap:
-                  <input type="checkbox" id="heatmap" />
-                </td>
-                <td id="radius" style="visibility:hidden">
-                  BlurRadius:
-                  <input type="number" id="blurRadius" value="10" style="width: 40px;" />
-                </td>
-              </tr>
-            </table>
-          </td>
-          <td>
-            <table class="settingsTable">
-              <tr>
-                <td>
-                  <center>Mode:
-                    <form id="refreshMode" style="border:1px;border-style:solid;padding:1px">
-                      <input type="radio" name="mode" value="manual" checked> Manual
-                      <br>
-                      <input type="radio" name="mode" value="live"> Live
-                      <br>
-                      <input type="radio" name="mode" value="replay"> Replay
-                    </form>
-                  </center>
-                </td>
-                <td style="width:1000px;">
-                  <div id="timeSlider"></div>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
+    <div class="collapser">
+      <i id="collapserIcon" class="flat-chevron-right"></i>
+      <i id="expanderIcon" class="flat-chevron-left"></i>
     </div>
+    <section>
+      <div class="config-header">
+        <h2>Layers</h2>
+        <!-- <div class="header-actions-group">
+          <div data-dojo-type="dijit/form/DropDownButton">
+            <span><i class="fa fa-plus"></i></span>
+            <div data-dojo-type="dijit/TooltipDialog" style="display: none;">
+              <label for="name2">Name:</label> <input data-dojo-type="dijit/form/TextBox" id="name2" name="name2" /><br />
+              <label for="hobby2">Hobby:</label> <input data-dojo-type="dijit/form/TextBox" id="hobby2" name="hobby2" /><br />
+              <button data-dojo-type="dijit/form/Button" type="submit">Save</button>
+            </div>
+          </div>
+        </div> -->
+      </div>
+      <div class="config-content">
+        <input type="text" id="inputUrl" value="http://storm.esri.com:6080/arcgis/rest/services/faa-4326-hex-flat/MapServer/0" />
+        <input type="button" class="button" id="addFSLayer" value="Add Layer" />
+      </div>
+    </section>
+
+    <section>
+      <div class="config-header">
+        <h2>Aggregation Settings</h2>
+        <div class="header-actions-group">
+          <div data-dojo-type="dijit/form/DropDownButton">
+            <span><i class="fa fa-gear"></i></span>
+            <div data-dojo-type="dijit/TooltipDialog" style="display: none;">
+              <div class="input-group">
+                <input type="checkbox" id="autoOffSet" checked="true" />
+                <label for="autoOffSet">Auto LOD offset</label>
+              </div>
+              <div id="radius" class="input-group" style="display:none">
+                <input type="number" id="blurRadius" value="10" style="width: 40px;" />
+                <label for="blurRadius">BlurRadius</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="config-content">
+        <div class="input-group">
+          <select name="aggStyle" id="aggStyle" style="width: 120px;">
+            <option value="geohash">GeoHash</option>
+            <option value="square">Square</option>
+            <option value="flatHexagon">Flat Hexagon</option>
+            <option value="pointyHexagon">Pointy Hexagon</option>
+            <option value="flatTriangle">Flat Triangle</option>
+            <option value="pointyTriangle">Pointy Triangle</option>
+          </select>
+          <label for="aggStyle">GeoHash Style</label>
+        </div>
+        <div class="input-group">
+          <input type="number" id="lod" value="3" style="width: 50px;" />
+          <label for="lod">LOD</label>
+        </div>
+        <div class="input-group">
+          <input type="checkbox" id="heatmap" />
+          <label for="heatmap">Heatmap</label>
+        </div>
+
+      </div>
+    </section>
+
+    <section>
+      <div class="config-header">
+        <h2>Streaming Mode</h2>
+      </div>
+      <div class="config-content">
+        <div class="input-group">
+          <select name="aggStreamMode" id="refreshMode" style="width: 120px;">
+            <option value="manual">Manual</option>
+            <option value="live">Live</option>
+            <option value="replay">Replay</option>
+          </select>
+          <label for="refreshMode">Mode</label>
+        </div>
+      </div>
+    </section>
   </div>
 </body>
