@@ -63,10 +63,14 @@
       "esri/geometry/Polygon",
 
       "esri/dijit/TimeSlider",
+      "esri/dijit/BasemapGallery",
 
       "esri/renderers/HeatmapRenderer",
       "esri/renderers/ClassBreaksRenderer",
 
+      "dijit/layout/BorderContainer",
+      "dijit/layout/ContentPane",
+      "dijit/TitlePane",
       "dijit/TooltipDialog",
       "dijit/form/DropDownButton",
 
@@ -77,9 +81,9 @@
       Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
       FeatureLayer, LabelClass,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
-      TimeSlider,
+      TimeSlider, BasemapGallery,
       HeatmapRenderer, ClassBreaksRenderer,
-      TooltipDialog, DropDownButton,
+      BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton,
       array) {
 
       parser.parse();
@@ -103,11 +107,17 @@
       esri.config.defaults.io.corsEnabledServers.push('https://storm.esri.com:6443');
 
       map = new Map("map", {
-        basemap: "topo",
+        basemap: "gray",
         center: [-96, 36.428],
         zoom: 4,
         showLabels: true
       });
+
+      var basemapGallery = new BasemapGallery({
+        showArcGISBasemaps: true,
+        map: map
+      }, "basemapGallery");
+      basemapGallery.startup();
 
       //### On Map load continue ###
 
@@ -617,13 +627,20 @@
 </head>
 
 <body class="flat">
-  <div id="map"></div>
-  <div id="timeSlider"></div>
-  <div id="controls">
-    <div class="collapser">
-      <i id="collapserIcon" class="flat-chevron-right"></i>
-      <i id="expanderIcon" class="flat-chevron-left"></i>
+  <div id="map">
+    <div class="basemapGallery-container" data-dojo-type="dijit/TitlePane"
+         data-dojo-props="title:'Switch Basemap', closable:false, open:false">
+      <div data-dojo-type="dijit/layout/ContentPane" style="width:380px; height:280px; overflow:auto;">
+        <div id="basemapGallery"></div>
+      </div>
     </div>
+  </div>
+  <div id="timeSlider"></div>
+  <div class="collapser">
+    <i id="collapserIcon" class="flat-chevron-right"></i>
+    <i id="expanderIcon" class="flat-chevron-left"></i>
+  </div>
+  <div id="controls">
     <section>
       <div class="config-header">
         <h2>Layers</h2>
@@ -704,3 +721,4 @@
     </section>
   </div>
 </body>
+</html>
