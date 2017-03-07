@@ -111,7 +111,7 @@ body {
 }
 
 .panel-collapsed #timeSlider {
-    width: 100%;
+    width: 100% !important;
 }
 
 .config-header {
