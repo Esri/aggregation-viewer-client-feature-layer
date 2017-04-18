@@ -311,20 +311,26 @@
             if (isFieldNumeric(field))
               select.options[pos] = new Option(field.name, field.name);
           } else {
-            if (field.type != "esriFieldTypeGeometry" && field.type != "esriFieldTypeBlob" && field.type != "esriFieldTypeRaster" && field.type != "esriFieldTypeRaster")
+           if (isSupportedStatField(field))
               select.options[pos] = new Option(field.name, field.name);
           }
           pos++;
         }
       }
 
-      function isFieldNumeric(field) {          
+      // field type can be one of the following: "esriFieldTypeSmallInteger", "esriFieldTypeInteger", "esriFieldTypeSingle", "esriFieldTypeDouble", "esriFieldTypeString", "esriFieldTypeDate", "esriFieldTypeOID", "esriFieldTypeGeometry", "esriFieldTypeBlob", "esriFieldTypeRaster", "esriFieldTypeGUID", "esriFieldTypeGlobalID", "esriFieldTypeXML"
+      function isFieldNumeric(field) {
           if (!field || !field.type)
             return false;
 
-          // field type can be one of the following: "esriFieldTypeSmallInteger", "esriFieldTypeInteger", "esriFieldTypeSingle", "esriFieldTypeDouble", "esriFieldTypeString", "esriFieldTypeDate", "esriFieldTypeOID", "esriFieldTypeGeometry", "esriFieldTypeBlob", "esriFieldTypeRaster", "esriFieldTypeGUID", "esriFieldTypeGlobalID", "esriFieldTypeXML"
-
           return (field.type == "esriFieldTypeSmallInteger" || field.type == "esriFieldTypeInteger" || field.type == "esriFieldTypeSingle" || field.type == "esriFieldTypeDouble" || field.type == "esriFieldTypeOID");
+      }
+
+      function isSupportedStatField(field) {
+          if (!field || !field.type)
+            return false;
+
+          return (field.type != "esriFieldTypeGeometry" && field.type != "esriFieldTypeBlob" && field.type != "esriFieldTypeRaster")
       }
 
       //#############################################################################################
