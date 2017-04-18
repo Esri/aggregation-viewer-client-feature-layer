@@ -97,6 +97,7 @@
       var minValue;
       var maxValue;
       var ignoreChangeEvent = false;
+      var layerFields;
 
       //#############################################################################################
       // Map Related functions
@@ -157,7 +158,7 @@
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
       on(dom.byId("useStats"), "change", toggleStats);
-      on(dom.byId("statField"), "change", refreshLayerFromUI);
+      on(dom.byId("statField"), "change", statFieldChanged);
       on(dom.byId("statType"), "change", refreshLayerFromUI);
 
       function togglePanel() {
@@ -235,7 +236,51 @@
         }
       }
 
-      function updateLayerFields(url) {
+      function statFieldChanged(evt) {
+        populateStatTypeSelectOptions();
+        refreshLayerFromUI();
+      }
+
+      function populateStatTypeSelectOptions() {
+        var statTypeSelect = dojo.byId("statType");
+        var prevStatType = statTypeSelect.value;
+
+        // clear statTypeSelect
+        var i;
+        for (i = statTypeSelect.options.length - 1; i >= 0; i--) {
+          statTypeSelect.remove(i);
+        }
+
+        // find the field by name
+        var fieldName = dojo.byId("statField").value;
+        var field = null;
+        for (i = 0; i < layerFields.length; i++) {
+          var currentField = layerFields[i];
+          if (currentField.name == fieldName)
+            field = currentField;
+        }
+
+        // add the stat type options
+        if (isFieldNumeric(field)) {
+          // add all types
+          var pos = 0;
+          statTypeSelect.options[pos++] = new Option("Average", "avg");
+          statTypeSelect.options[pos++] = new Option("Maximum", "max");
+          statTypeSelect.options[pos++] = new Option("Minimum", "min");
+          statTypeSelect.options[pos++] = new Option("Standard Deviation", "stddev");
+          statTypeSelect.options[pos++] = new Option("Sum", "sum");
+          statTypeSelect.options[pos++] = new Option("Variance", "var");
+          statTypeSelect.options[pos++] = new Option("Count Distinct", "countdistinct");
+        } else {
+          // only add count distinct type
+          statTypeSelect.options[0] = new Option("Count Distinct", "countdistinct");
+        }        
+
+        refreshLayerFromUI();
+      }
+
+      function updateLayerFields(numericOnly) {
+        var url = dojo.byId("inputUrl").value;
         var mapServiceInfoDeferred = esri.request({
           url: url,
           content: {
@@ -244,32 +289,43 @@
           callbackParamName: "callback"
         });
         mapServiceInfoDeferred.then(function (response) {
-              var fields = response.fields;
-              populateSelectWithFields(dojo.byId(statField), fields);
-              //populateSelectWithFields(dojo.byId(rotationExpression), fields);
+              layerFields = response.fields;
+              populateSelectWithLayerFields(dojo.byId(statField), numericOnly);
+              populateStatTypeSelectOptions();
             }
         );
       }
 
-      function populateSelectWithFields(select, fields) {
+      function populateSelectWithLayerFields(select, numericOnly) {
         // clear exiting options
         var i;
         for (i = select.options.length - 1; i >= 0; i--) {
           select.remove(i);
         }
 
-        // populate options from fields
+        // populate options based on the layerFields array
         var pos = 0;
-        for (i = 0; i < fields.length; i++) {
-          var field = fields[i];
-          // field type can be one of the following: "esriFieldTypeSmallInteger", "esriFieldTypeInteger", "esriFieldTypeSingle", "esriFieldTypeDouble", "esriFieldTypeString", "esriFieldTypeDate", "esriFieldTypeOID", "esriFieldTypeGeometry", "esriFieldTypeBlob", "esriFieldTypeRaster", "esriFieldTypeGUID", "esriFieldTypeGlobalID", "esriFieldTypeXML"
-          if (field.type != "esriFieldTypeGeometry" && field.type != "esriFieldTypeBlob" && field.type != "esriFieldTypeRaster" && field.type != "esriFieldTypeRaster") {
-            select.options[pos] = new Option(field.name, field.name);
-            pos++;
+        for (i = 0; i < layerFields.length; i++) {
+          var field = layerFields[i];
+          if (numericOnly) {
+            if (isFieldNumeric(field))
+              select.options[pos] = new Option(field.name, field.name);
+          } else {
+            if (field.type != "esriFieldTypeGeometry" && field.type != "esriFieldTypeBlob" && field.type != "esriFieldTypeRaster" && field.type != "esriFieldTypeRaster")
+              select.options[pos] = new Option(field.name, field.name);
           }
+          pos++;
         }
       }
 
+      function isFieldNumeric(field) {          
+          if (!field || !field.type)
+            return false;
+
+          // field type can be one of the following: "esriFieldTypeSmallInteger", "esriFieldTypeInteger", "esriFieldTypeSingle", "esriFieldTypeDouble", "esriFieldTypeString", "esriFieldTypeDate", "esriFieldTypeOID", "esriFieldTypeGeometry", "esriFieldTypeBlob", "esriFieldTypeRaster", "esriFieldTypeGUID", "esriFieldTypeGlobalID", "esriFieldTypeXML"
+
+          return (field.type == "esriFieldTypeSmallInteger" || field.type == "esriFieldTypeInteger" || field.type == "esriFieldTypeSingle" || field.type == "esriFieldTypeDouble" || field.type == "esriFieldTypeOID");
+      }
 
       //#############################################################################################
       // Layer related functions
@@ -319,8 +375,7 @@
         console.log("Client FS Aggregation Layer added");
         refreshLayerFromUI();
 
-        var url = dojo.byId("inputUrl").value;
-        updateLayerFields(url);
+        updateLayerFields(false);
       };
 
       //### Heat Map Feature Layer ###
