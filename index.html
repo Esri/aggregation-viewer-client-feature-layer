@@ -261,9 +261,9 @@
         }
 
         // add the stat type options
+        var pos = 0;
         if (isFieldNumeric(field)) {
           // add all types
-          var pos = 0;
           statTypeSelect.options[pos++] = new Option("Average", "avg");
           statTypeSelect.options[pos++] = new Option("Maximum", "max");
           statTypeSelect.options[pos++] = new Option("Minimum", "min");
@@ -271,9 +271,11 @@
           statTypeSelect.options[pos++] = new Option("Sum", "sum");
           statTypeSelect.options[pos++] = new Option("Variance", "var");
           statTypeSelect.options[pos++] = new Option("Count Distinct", "countdistinct");
+          statTypeSelect.options[pos++] = new Option("Count", "count");
         } else {
           // only add count distinct type
-          statTypeSelect.options[0] = new Option("Count Distinct", "countdistinct");
+          statTypeSelect.options[pos++] = new Option("Count Distinct", "countdistinct");
+          statTypeSelect.options[pos++] = new Option("Count", "count");
         }        
 
         refreshLayerFromUI();
