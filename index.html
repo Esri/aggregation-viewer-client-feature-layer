@@ -156,11 +156,13 @@
       on(dojo.byId("aggStyle"), "change", toggleRefresh);
       on(dojo.byId("lod"), "change", toggleRefresh);
       on(dojo.byId("blurRadius"), "change", toggleRefresh);
+      on(dom.byId("useStats"), "change", toggleStats);
+
+      on(dijit.byId("statField"), "change", statFieldChanged);
+      on(dijit.byId("statType"), "change", updateLayerFromUIChange);
+
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
-      on(dom.byId("useStats"), "change", toggleStats);
-      dijit.byId("statField").on("change", statFieldChanged);
-      dijit.byId("statType").on("change", updateLayerFromUIChange);
 
       function togglePanel() {
         domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
@@ -169,7 +171,7 @@
       //### Switch change functions ###
 
       function toggleMode(evt) {
-        console.log(evt.target.value);
+        //console.log(evt.target.value);
         if (evt.target.value == "manual") {
           live = false;
           replay = false;
@@ -379,6 +381,10 @@
             "type": "esriFieldTypeInteger",
             "alias": "Count"
                 }, {
+            "name": "Weight",
+            "type": "esriFieldTypeDouble",
+            "alias": "Weight"
+                }, {
             "name": "Geometry",
             "type": "esriFieldTypeGeometry",
             "alias": "Geometry"
@@ -401,7 +407,7 @@
         var label = createRenderer("Label");
         FSAggregationLayer.setLabelingInfo([label]);
         map.addLayer(FSAggregationLayer);
-        console.log("Client FS Aggregation Layer added");
+        //console.log("Client FS Aggregation Layer added");
         updateLayerFromUIChange();
 
         updateLayerFields(false);
@@ -425,6 +431,10 @@
             "type": "esriFieldTypeInteger",
             "alias": "Count"
                 }, {
+            "name": "Weight",
+            "type": "esriFieldTypeDouble",
+            "alias": "Weight"
+                }, {
             "name": "geometry",
             "type": "esriFieldTypeGeometry",
             "alias": ""
@@ -444,7 +454,7 @@
         });
         heatmapLayer.setRenderer(createRenderer("Heatmap"));
         map.addLayer(heatmapLayer);
-        console.log("Heatmap Layer added");
+        //console.log("Heatmap Layer added");
       };
 
       //### FeatureLayer Time Info query###
@@ -487,9 +497,9 @@
           };
           classColorInfo = [];
 
-          //Define breaks and color
+          // Define breaks and color
           var renderer = new ClassBreaksRenderer({
-            field: "Count",
+            field: "Weight",
             defaultSymbol: symbol,
             normalizationType: "percent-of-total",
             normalizationTotal: 100,
@@ -577,16 +587,16 @@
                 color: "rgb(255, 0, 0)"
                     }],
             blurRadius: 12,
-            field: "Count"
+            field: "Weight"
           });
 
           //### Add Labels ###
         } else if (type == "Label") {
 
-          //create a text symbol and renderer to define the style of labels
+          // create a text symbol and renderer to define the style of labels
           var labelJson = {
             "labelExpressionInfo": {
-              "value": "{Count}"
+              "value": "{Weight}"
             },
             "labelPlacement": "always-horizontal"
           };
@@ -635,7 +645,7 @@
           url += "&outStatistics=" + encodeURIComponent(outStatisticsStr);
         }
 
-        console.log(url);
+        //console.log(url);
         return url;
       }
 
@@ -648,28 +658,41 @@
         });
         request.then(
           function (response) {
-            console.log(response);
-            var count = [];
-            //Create graphics from response features
+            //console.log(response);
+            var weightsArray = [];
+            
+            // Create features (graphics) from the response features
             var features = arr.map(response.features, function (feature, i) {
                 var newFeature = {};
                 var geometry;
                 var attributes = {};
-                count.push(feature.attributes.Count);
+
                 geometry = new Polygon(feature.geometry)
                 if (!geometry.hasOwnProperty('spatialReference') || !geometry['spatialReference']) {
                   geometry['spatialReference'] = sr;
-                };
+                }
+
                 if (dojo.byId("heatmap").checked == true) {
                   geometry = geometry.getCentroid();
-                };
+                }
+
+                if (dojo.byId("useStats").checked == true) {
+                  var weightFieldName = dijit.byId("statField").value + "_" + dijit.byId("statType").value;
+                  feature.attributes["Weight"] = feature.attributes[weightFieldName];
+                } else {
+                  feature.attributes["Weight"] = feature.attributes["Count"];
+                }
+                weightsArray.push(feature.attributes.Weight);
+
                 newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
-              })
-              //Calculate min/max count value to adjust renderer
-            maxValue = Math.max.apply(null, count);
-            minValue = Math.min.apply(null, count);
-            //Add features to respective layer and adjust renderer
+              });
+              
+            // Calculate min and max count values to adjust renderer
+            maxValue = Math.max.apply(null, weightsArray);
+            minValue = Math.min.apply(null, weightsArray);
+            
+            // Add features to respective layer and adjust renderer
             if (dojo.byId("heatmap").checked == true) {
               var layer = map.getLayer("heatmap");
               layer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
@@ -677,7 +700,8 @@
               var layer = map.getLayer("FSAggregations");
               layer.renderer.normalizationTotal = maxValue;
             }
-            //Update features in the client side layer
+            
+            // Update features in the client side layer
             map.getLayer("FSAggregations").clear();
             map.getLayer("heatmap").clear();
             map.getLayer("heatmap").refresh();
