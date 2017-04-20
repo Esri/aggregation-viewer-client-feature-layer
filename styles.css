@@ -290,3 +290,7 @@ section:first-of-type .config-header {
     -webkit-box-shadow: none;
     box-shadow: none;
 }
+
+.fieldTypeSelect{
+  color:#0000ff;
+}

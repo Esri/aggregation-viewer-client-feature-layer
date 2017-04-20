@@ -73,6 +73,7 @@
       "dijit/TitlePane",
       "dijit/TooltipDialog",
       "dijit/form/DropDownButton",
+      "dijit/form/Select",
 
       "dojo/_base/array",
       "dojo/domReady!"
@@ -83,7 +84,7 @@
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
       TimeSlider, BasemapGallery,
       HeatmapRenderer, ClassBreaksRenderer,
-      BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton,
+      BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton, Select,
       array) {
 
       parser.parse();
@@ -132,7 +133,7 @@
 
       map.on("extent-change", function (evt) {
         if (map.getLayer("FSAggregations") && !ignoreChangeEvent && live == false) {
-          refreshLayerFromUI();
+          updateLayerFromUIChange();
         };
       });
 
@@ -158,8 +159,8 @@
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
       on(dom.byId("useStats"), "change", toggleStats);
-      on(dom.byId("statField"), "change", statFieldChanged);
-      on(dom.byId("statType"), "change", refreshLayerFromUI);
+      dijit.byId("statField").on("change", statFieldChanged);
+      dijit.byId("statType").on("change", updateLayerFromUIChange);
 
       function togglePanel() {
         domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
@@ -175,7 +176,7 @@
           domStyle.set(dom.byId('timeSlider'), "display", 'none');
           map.setTimeSlider(null);
           map.setTimeExtent(null);
-          refreshLayerFromUI();
+          updateLayerFromUIChange();
         } else if (evt.target.value == "live") {
           live = true;
           replay = false;
@@ -214,12 +215,12 @@
         } else {
           dojo.byId("radius").style.display = "none";
         }
-        refreshLayerFromUI();
+        updateLayerFromUIChange();
       }
 
       function toggleRefresh(evt) {
         if (live == false) {
-          refreshLayerFromUI();
+          updateLayerFromUIChange();
         }
       }
 
@@ -232,27 +233,26 @@
             dojo.byId("statField").style.display = "none";
             dojo.byId("statType").style.display = "none";
           }
-          refreshLayerFromUI();
+          updateLayerFromUIChange();
         }
       }
 
-      function statFieldChanged(evt) {
-        populateStatTypeSelectOptions();
-        refreshLayerFromUI();
+      function statFieldChanged(val) {
+        var control = dijit.byId('statField');
+        var selectedOption = control.getOptions(val);
+        populateStatTypeSelectOptions(selectedOption);
+        updateLayerFromUIChange();
       }
 
-      function populateStatTypeSelectOptions() {
-        var statTypeSelect = dojo.byId("statType");
+      function populateStatTypeSelectOptions(selectedOption) {
+        var statTypeSelect = dijit.byId("statType");
         var prevStatType = statTypeSelect.value;
 
         // clear statTypeSelect
-        var i;
-        for (i = statTypeSelect.options.length - 1; i >= 0; i--) {
-          statTypeSelect.remove(i);
-        }
+        statTypeSelect.removeOption(statTypeSelect.getOptions());
 
         // find the field by name
-        var fieldName = dojo.byId("statField").value;
+        var fieldName = dijit.byId("statField").value;
         var field = null;
         for (i = 0; i < layerFields.length; i++) {
           var currentField = layerFields[i];
@@ -261,24 +261,26 @@
         }
 
         // add the stat type options
-        var pos = 0;
+        var statTypeOptions = null;
         if (isFieldNumeric(field)) {
           // add all types
-          statTypeSelect.options[pos++] = new Option("Average", "avg");
-          statTypeSelect.options[pos++] = new Option("Maximum", "max");
-          statTypeSelect.options[pos++] = new Option("Minimum", "min");
-          statTypeSelect.options[pos++] = new Option("Standard Deviation", "stddev");
-          statTypeSelect.options[pos++] = new Option("Sum", "sum");
-          statTypeSelect.options[pos++] = new Option("Variance", "var");
-          statTypeSelect.options[pos++] = new Option("Count Distinct", "countdistinct");
-          statTypeSelect.options[pos++] = new Option("Count", "count");
+          var options = [ {'label':'Average', 'value':'avg'},
+                          {'label':'Maximum', 'value':'max'},
+                          {'label':'Minimum', 'value':'min'},
+                          {'label':'Standard Deviation', 'value':'stddev'},
+                          {'label':'Sum', 'value':'sum'},
+                          {'label':'Variance', 'value':'var'},
+                          {'label':'Count Distinct', 'value':'countdistinct'},
+                          {'label':'Count', 'value':'count'} ];
+          statTypeSelect.addOption(options);
         } else {
-          // only add count distinct type
-          statTypeSelect.options[pos++] = new Option("Count Distinct", "countdistinct");
-          statTypeSelect.options[pos++] = new Option("Count", "count");
+          // add only the count and count distince types
+          var options = [ {'label':'Count Distinct', 'value':'countdistinct'},
+                          {'label':'Count', 'value':'count'} ];
+          statTypeSelect.addOption(options);
         }
 
-        refreshLayerFromUI();
+        updateLayerFromUIChange();
       }
 
       function updateLayerFields(numericOnly) {
@@ -292,10 +294,30 @@
         });
         mapServiceInfoDeferred.then(function (response) {
               layerFields = response.fields;
-              populateSelectWithLayerFields(dojo.byId(statField), numericOnly);
-              populateStatTypeSelectOptions();
+              populateDijitSelectWithLayerFields(dijit.byId('statField'), numericOnly);
+              statFieldChanged(dijit.byId('statField').value); // to init-populate the stat types control
             }
         );
+      }
+
+      function populateDijitSelectWithLayerFields(select, numericOnly) {
+        // clear exiting options
+        select.removeOption(select.getOptions());
+        
+        // populate options based on the layerFields array
+        var i;
+        for (i = 0; i < layerFields.length; i++) {
+          var field = layerFields[i];
+          var fieldType = field.type.substring(13);
+          var option = {'label': field.name + "&nbsp;&nbsp;" + "<em class='fieldTypeSelect'>" + fieldType + '</em>', 'value': field.name, 'type': field.type };
+          if (numericOnly) {
+            if (isFieldNumeric(field))
+              select.addOption(option);
+          } else {
+            if (isSupportedStatField(field))
+              select.addOption(option);
+          }
+        }
       }
 
       function populateSelectWithLayerFields(select, numericOnly) {
@@ -380,7 +402,7 @@
         FSAggregationLayer.setLabelingInfo([label]);
         map.addLayer(FSAggregationLayer);
         console.log("Client FS Aggregation Layer added");
-        refreshLayerFromUI();
+        updateLayerFromUIChange();
 
         updateLayerFields(false);
       };
@@ -605,9 +627,9 @@
 
         if (dojo.byId("useStats").checked == true) {
           var outStatisticsObj = [ {
-            "statisticType": dojo.byId("statType").value,
-            "onStatisticField": dojo.byId("statField").value,
-            "outStatisticFieldName": dojo.byId("statField").value + "_" + dojo.byId("statType").value
+            "statisticType": dijit.byId("statType").value,
+            "onStatisticField": dijit.byId("statField").value,
+            "outStatisticFieldName": dijit.byId("statField").value + "_" + dijit.byId("statType").value
           } ];
           var outStatisticsStr = JSON.stringify(outStatisticsObj);
           url += "&outStatistics=" + encodeURIComponent(outStatisticsStr);
@@ -617,7 +639,7 @@
         return url;
       }
 
-      function refreshLayerFromUI() {
+      function updateLayerFromUIChange() {
         var url = buildQueryUrlFromUI();
         var request = esriRequest({
           "url": url,
@@ -689,7 +711,7 @@
         timeSlider.on("time-extent-change", function () {
           if (!ignoreChangeEvent) {
             timePara = timeSlider.getCurrentTimeExtent();
-            refreshLayerFromUI();
+            updateLayerFromUIChange();
           };
         });
         //add labels for every other time stop
@@ -708,7 +730,7 @@
           var labels = createLabels();
           timeSlider.setLabels(labels);
           domStyle.set(dom.byId('timeSlider'), "display", 'block');
-          refreshLayerFromUI();
+          updateLayerFromUIChange();
           ignoreChangeEvent = false;
         }, 1000);
       };
@@ -745,7 +767,7 @@
 
       function autoUpdate() {
         setTimeout(function () {
-          refreshLayerFromUI();
+          updateLayerFromUIChange();
           if (live) {
             autoUpdate();
           };
@@ -831,22 +853,14 @@
           <label for="heatmap">Heatmap</label>
         </div>
 
-        <div class="input-group input-group-full">
-          <input type="checkbox" id="useStats"/>
+        <div>
           <label for="useStats">Statistics</label>
+          <input type="checkbox" id="useStats" style="top:4px;"/>
         </div>
-        <div class="input-row">
-          <select name="statField" id="statField" style="width: 90px; margin-top:3px; display:none;" value="">
+        <div style="display:inline-block;width:100%;">
+          <select name="statField" data-dojo-type="dijit/form/Select" data-dojo-attach-point="statField" id="statField" style="width: 250px; margin-top:3px; display:none; float:left;">
           </select>
-          <select name="statType" id="statType" style="width: 90px; margin-top:3px; display:none;" value="avg">
-            <option value="avg">Average</option>
-            <option value="max">Maximum</option>
-            <option value="min">Minimum</option>
-            <option value="stddev">Standard Deviation</option>
-            <option value="sum">Sum</option>
-            <option value="var">Variance</option>
-            <option value="countdistinct">Count Distinct</option>
-            <option value="count">Count</option>
+          <select name="statType"  data-dojo-type="dijit/form/Select" data-dojo-attach-point="statType" id="statType" style="width: 250px; margin-top:3px; display:none; float:left;">
           </select>
         </div>
       </div>
