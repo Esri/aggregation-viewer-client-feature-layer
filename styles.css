@@ -139,6 +139,14 @@ section:first-of-type .config-header {
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
+    max-height: 500px;
+    transition: all 400ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.section-hidden .config-content {
+    padding: 0 10px;
+    max-height: 0;
+    overflow: hidden;
 }
 
 .header-actions-group i {

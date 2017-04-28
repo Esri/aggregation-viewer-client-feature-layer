@@ -45,6 +45,7 @@
       "dojo/on",
       "dojo/json",
       "dojo/_base/array",
+      "dojo/query",
 
       "esri/map",
       "esri/graphic",
@@ -78,7 +79,7 @@
       "dojo/_base/array",
       "dojo/domReady!"
     ], function (
-      parser, dom, domStyle, domClass, on, JSON, arr,
+      parser, dom, domStyle, domClass, on, JSON, arr, domQuery,
       Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
       FeatureLayer, LabelClass,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
@@ -142,6 +143,43 @@
       //#############################################################################################
 
       //### UI event listener ###
+
+      var layersVisibility = true;
+      on(dojo.byId("layersToggle"), "click", function () {
+        //toggle section visibility
+        if (layersVisibility) {
+          domClass.add(dojo.byId("layersSection"), "section-hidden");
+          domClass.replace(domQuery("#layersToggle i")[0], "fa-chevron-down", "fa-chevron-up");
+        } else {
+          domClass.remove(dojo.byId("layersSection"), "section-hidden");
+          domClass.replace(domQuery("#layersToggle i")[0], "fa-chevron-up", "fa-chevron-down");
+        }
+        layersVisibility = !layersVisibility;
+      });
+      var aggSettingsVisibility = true;
+      on(dojo.byId("aggSettingsToggle"), "click", function () {
+        //toggle section visibility
+        if (aggSettingsVisibility) {
+          domClass.add(dojo.byId("aggSettingsSection"), "section-hidden");
+          domClass.replace(domQuery("#aggSettingsToggle i")[0], "fa-chevron-down", "fa-chevron-up");
+        } else {
+          domClass.remove(dojo.byId("aggSettingsSection"), "section-hidden");
+          domClass.replace(domQuery("#aggSettingsToggle i")[0], "fa-chevron-up", "fa-chevron-down");
+        }
+        aggSettingsVisibility = !aggSettingsVisibility;
+      });
+      var streamingModeVisibility = true;
+      on(dojo.byId("streamingModeToggle"), "click", function () {
+        //toggle section visibility
+        if (streamingModeVisibility) {
+          domClass.add(dojo.byId("streamingModeSection"), "section-hidden");
+          domClass.replace(domQuery("#streamingModeToggle i")[0], "fa-chevron-down", "fa-chevron-up");
+        } else {
+          domClass.remove(dojo.byId("streamingModeSection"), "section-hidden");
+          domClass.replace(domQuery("#streamingModeToggle i")[0], "fa-chevron-up", "fa-chevron-down");
+        }
+        streamingModeVisibility = !streamingModeVisibility;
+      });
 
       on(dojo.byId("addFSLayer"), "click", function () {
         getLayerTimeInfo();
@@ -305,7 +343,7 @@
       function populateDijitSelectWithLayerFields(select, numericOnly) {
         // clear exiting options
         select.removeOption(select.getOptions());
-        
+
         // populate options based on the layerFields array
         var i;
         for (i = 0; i < layerFields.length; i++) {
@@ -660,7 +698,7 @@
           function (response) {
             //console.log(response);
             var weightsArray = [];
-            
+
             // Create features (graphics) from the response features
             var features = arr.map(response.features, function (feature, i) {
                 var newFeature = {};
@@ -687,11 +725,11 @@
                 newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
               });
-              
+
             // Calculate min and max count values to adjust renderer
             maxValue = Math.max.apply(null, weightsArray);
             minValue = Math.min.apply(null, weightsArray);
-            
+
             // Add features to respective layer and adjust renderer
             if (dojo.byId("heatmap").checked == true) {
               var layer = map.getLayer("heatmap");
@@ -700,7 +738,7 @@
               var layer = map.getLayer("FSAggregations");
               layer.renderer.normalizationTotal = maxValue;
             }
-            
+
             // Update features in the client side layer
             map.getLayer("FSAggregations").clear();
             map.getLayer("heatmap").clear();
@@ -817,9 +855,12 @@
     <i id="expanderIcon" class="flat-chevron-left"></i>
   </div>
   <div id="controls">
-    <section>
+    <section id="layersSection">
       <div class="config-header">
         <h2>Layers</h2>
+        <div class="header-actions-group">
+          <a href="#" id="layersToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
         <!-- <div class="header-actions-group">
           <div data-dojo-type="dijit/form/DropDownButton">
             <span><i class="fa fa-plus"></i></span>
@@ -837,23 +878,11 @@
       </div>
     </section>
 
-    <section>
+    <section id="aggSettingsSection">
       <div class="config-header">
         <h2>Aggregation Settings</h2>
         <div class="header-actions-group">
-          <div data-dojo-type="dijit/form/DropDownButton">
-            <span><i class="fa fa-gear"></i></span>
-            <div data-dojo-type="dijit/TooltipDialog" style="display: none;">
-              <div class="input-group">
-                <input type="checkbox" id="autoOffSet" checked="true" />
-                <label for="autoOffSet">Auto LOD offset</label>
-              </div>
-              <div id="radius" class="input-group" style="display:none">
-                <input type="number" id="blurRadius" value="10" style="width: 40px;" />
-                <label for="blurRadius">BlurRadius</label>
-              </div>
-            </div>
-          </div>
+          <a href="#" id="aggSettingsToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
       </div>
       <div class="config-content">
@@ -876,10 +905,17 @@
           <input type="checkbox" id="heatmap" />
           <label for="heatmap">Heatmap</label>
         </div>
-
-        <div>
-          <label for="useStats">Statistics</label>
+        <div class="input-group">
+          <input type="checkbox" id="autoOffSet" checked="true" />
+          <label for="autoOffSet">Auto LOD offset</label>
+        </div>
+        <div id="radius" class="input-group" style="display:none">
+          <input type="number" id="blurRadius" value="10" style="width: 40px;" />
+          <label for="blurRadius">BlurRadius</label>
+        </div>
+        <div class="input-group">
           <input type="checkbox" id="useStats" style="top:4px;"/>
+          <label for="useStats">Statistics</label>
         </div>
         <div style="display:inline-block;width:100%;">
           <select name="statField" data-dojo-type="dijit/form/Select" data-dojo-attach-point="statField" id="statField" style="width: 250px; margin-top:3px; display:none; float:left;">
@@ -890,9 +926,12 @@
       </div>
     </section>
 
-    <section>
+    <section id="streamingModeSection">
       <div class="config-header">
         <h2>Streaming Mode</h2>
+        <div class="header-actions-group">
+          <a href="#" id="streamingModeToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
       </div>
       <div class="config-content">
         <div class="input-group">
