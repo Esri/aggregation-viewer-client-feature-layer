@@ -46,6 +46,7 @@
       "dojo/json",
       "dojo/_base/array",
       "dojo/query",
+      "dojo/number",
 
       "esri/map",
       "esri/graphic",
@@ -76,17 +77,15 @@
       "dijit/form/DropDownButton",
       "dijit/form/Select",
 
-      "dojo/_base/array",
       "dojo/domReady!"
     ], function (
-      parser, dom, domStyle, domClass, on, JSON, arr, domQuery,
+      parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
       Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
       FeatureLayer, LabelClass,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
       TimeSlider, BasemapGallery,
       HeatmapRenderer, ClassBreaksRenderer,
-      BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton, Select,
-      array) {
+      BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton, Select) {
 
       parser.parse();
 
@@ -700,7 +699,7 @@
             var weightsArray = [];
 
             // Create features (graphics) from the response features
-            var features = arr.map(response.features, function (feature, i) {
+            var features = array.map(response.features, function (feature, i) {
                 var newFeature = {};
                 var geometry;
                 var attributes = {};
@@ -714,13 +713,15 @@
                   geometry = geometry.getCentroid();
                 }
 
+                var weight = 0;
                 if (dojo.byId("useStats").checked == true) {
                   var weightFieldName = dijit.byId("statField").value + "_" + dijit.byId("statType").value;
-                  feature.attributes["Weight"] = feature.attributes[weightFieldName];
+                  weight = feature.attributes[weightFieldName];
                 } else {
-                  feature.attributes["Weight"] = feature.attributes["Count"];
+                  weight = feature.attributes["Count"];
                 }
-                weightsArray.push(feature.attributes.Weight);
+                feature.attributes["Weight"] = number.round(weight, 2);
+                weightsArray.push(weight);
 
                 newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
@@ -834,7 +835,7 @@
             autoUpdate();
           };
         }, 2000);
-      };
+      }
 
     });
   </script>
