@@ -1,0 +1,126 @@
+@import url("./flat/icons/flat-icons.css");
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  font-size: 12px;
+}
+
+#map {
+  height: -moz-calc(100% - 130px);
+  height: -webkit-calc(100% - 130px);
+  height: calc(100% - 130px);
+  width: 100%;
+  z-index: -1;
+}
+
+#controls {
+  position: absolute;
+  bottom: 0px;
+  width: 100%;
+  height: 120px;
+  background: rgba(255, 255, 255, 0);
+  padding: 2px 0px;
+  white-space: nowrap;
+  color: #6f6e6e;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.settingsTable {
+  border-color: rgba(255, 255, 255, 0.6);
+  font-family: sans-serif;
+  font-size: 12px;
+  color: #6f6e6e;
+  text-align: left;
+  overflow: left;
+  width: 100%;
+  vertical-align: text-top;
+}
+
+#controls .tableContainer{
+  /*height:120px;
+  overflow-y: auto;*/
+}
+
+.settingsTable td {
+  vertical-align: top;
+  padding: 1px 2px;
+}
+
+
+.collapser {
+    position: absolute;
+    width: 2.7rem;
+    height: 2.7rem;
+    left: 0px;
+    bottom: 130px;
+    font-size: 2.7rem;
+    background: #FAFAFA;
+    cursor: pointer;
+}
+
+#expanderIcon {
+  display: none;
+}
+
+body.slider-expanded #controls {
+  height: 190px;
+  display: block;
+}
+
+body.slider-expanded #map{
+  height: -moz-calc(100% - 200px);
+  height: -webkit-calc(100% - 200px);
+  height: calc(100% - 200px);
+}
+
+body.slider-expanded .collapser {
+  bottom: 200px;
+}
+
+body.panel-collapsed #controls {
+  height: 0;
+  display: none;
+}
+
+body.panel-collapsed #controls section {
+  overflow: hidden;
+}
+
+body.panel-collapsed #expanderIcon {
+  display: inline-block;
+}
+
+body.panel-collapsed #collapserIcon {
+  display: none;
+}
+
+
+body.panel-collapsed #map{
+  height: -moz-calc(100% - 1px);
+  height: -webkit-calc(100% - 1px);
+  height: calc(100% - 1px);
+}
+
+body.panel-collapsed .collapser {
+  bottom: 0px;
+}
+
+#settingsTable{
+  width: 800px;
+}
+
+#modeTable {
+  width:180px;
+}
+
+.timeSlideContainer{
+  width: 800px;
+  float: left;
+  transform: translateX(-40px);
+}

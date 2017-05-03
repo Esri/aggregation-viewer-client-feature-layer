@@ -29,58 +29,14 @@
   <title>Aggregation Viewer - Client Side Feature Layer</title>
   <link rel="stylesheet" href="https://js.arcgis.com/3.19/dijit/themes/claro/claro.css">
   <link rel="stylesheet" href="https://js.arcgis.com/3.19/esri/css/esri.css">
+  <link rel="stylesheet" href="./styles.css">
 
-  <style type="text/css">
-    html,
-    body {
-      height: 100%;
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      font-family: sans-serif;
-      font-size: 12px;
-    }
-    
-    #map {
-      height: -moz-calc(100% - 190px);
-      height: -webkit-calc(100% - 190px);
-      height: calc(100% - 190px);
-      width: 100%;
-      z-index: -1;
-    }
-    
-    #controls {
-      position: absolute;
-      bottom: 0px;
-      width: 100%;
-      height: 180px;
-      background: rgba(255, 255, 255, 0);
-      padding: 2px 0px;
-      white-space: nowrap;
-      color: #6f6e6e;
-    }
-    
-    .settingsTable {
-      border-color: rgba(255, 255, 255, 0.6);
-      font-family: sans-serif;
-      font-size: 12px;
-      color: #6f6e6e;
-      text-align: left;
-      overflow: left;
-      width: 100%;
-      vertical-align: text-top;
-    }
-    
-    .settingsTable td {
-      vertical-align: top;
-      padding: 1px 2px;
-    }
-  </style>
   <script src="https://js.arcgis.com/3.19/"></script>
   <script>
     require([
       "dojo/dom",
       "dojo/dom-style",
+      "dojo/dom-class",
       "dojo/on",
       "dojo/json",
       "dojo/_base/array",
@@ -106,9 +62,13 @@
       "esri/renderers/HeatmapRenderer",
       "esri/renderers/ClassBreaksRenderer",
 
-      "dojo/_base/array",
       "dojo/domReady!"
-    ], function (dom, domStyle, on, JSON, arr, Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent, FeatureLayer, LabelClass, SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon, TimeSlider, HeatmapRenderer, ClassBreaksRenderer, array) {
+    ], function (dom, domStyle, domClass, on, JSON, array,
+                 Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
+                 FeatureLayer, LabelClass,
+                 SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
+                 TimeSlider,
+                 HeatmapRenderer, ClassBreaksRenderer) {
 
       //### global variables ###
       var map;
@@ -170,13 +130,20 @@
       on(dojo.byId("lod"), "change", toggleRefresh);
       on(dojo.byId("blurRadius"), "change", toggleRefresh);
 
+      on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
+
+      function togglePanel() {
+        domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
+      }
+
       //### Switch change functions ###
 
       function toggleMode(evt) {
-        console.log(evt.target.value);
+        //console.log(evt.target.value);
         if (evt.target.value == "manual") {
           live = false;
           replay = false;
+          domClass.remove(document.getElementsByTagName("body")[0], "slider-expanded");
           domStyle.set(dom.byId('timeSlider'), "display", 'none');
           map.setTimeSlider(null);
           map.setTimeExtent(null);
@@ -184,6 +151,7 @@
         } else if (evt.target.value == "live") {
           live = true;
           replay = false;
+          domClass.remove(document.getElementsByTagName("body")[0], "slider-expanded");
           autoUpdate();
           domStyle.set(dom.byId('timeSlider'), "display", 'none');
           map.setTimeSlider(null);
@@ -191,6 +159,7 @@
         } else if (evt.target.value == "replay") {
           live = false;
           replay = true;
+          domClass.add(document.getElementsByTagName("body")[0], "slider-expanded");
           if (startTimeSlider == true) {
             initTimeSlider();
             startTimeSlider = false;
@@ -272,7 +241,7 @@
         var label = createRenderer("Label");
         FSAggregationLayer.setLabelingInfo([label]);
         map.addLayer(FSAggregationLayer);
-        console.log("Client FS Aggregation Layer added");
+        //console.log("Client FS Aggregation Layer added");
         getFSAggregation();
       };
 
@@ -311,7 +280,7 @@
         });
         heatmapLayer.setRenderer(createRenderer("Heatmap"));
         map.addLayer(heatmapLayer);
-        console.log("Heatmap Layer added");
+        //console.log("Heatmap Layer added");
       };
 
       //### FeatureLayer Time Info query###
@@ -354,7 +323,7 @@
           };
           classColorInfo = [];
 
-          //Define breaks and color
+          // define breaks and color
           var renderer = new ClassBreaksRenderer({
             field: "Count",
             defaultSymbol: symbol,
@@ -398,9 +367,8 @@
                         }]
           });
 
-
-          //### HeatMap Renderer ###
         } else if (type == "Heatmap") {
+          //### HeatMap Renderer ###
           var renderer = new HeatmapRenderer({
             colorStops: [
               {
@@ -450,7 +418,7 @@
           //### Add Labels ###
         } else if (type == "Label") {
 
-          //create a text symbol and renderer to define the style of labels
+          // create a text symbol and renderer to define the style of labels
           var labelJson = {
             "labelExpressionInfo": {
               "value": "{Count}"
@@ -469,9 +437,9 @@
 
       //#############################################################################################
       // BDS FS Aggregation Query
-      //############################################################################################# 
+      //#############################################################################################
       function constructURL() {
-        //Get parameters from UI
+        // get parameters from UI
         if (replay) {
           var start = timePara.startTime.getTime();
           var end = timePara.endTime.getTime();
@@ -490,10 +458,10 @@
           };
         };
 
-        //Construct URL for aggregation query
+        // construct URL for aggregation query
         var url = dojo.byId("inputUrl").value;
         url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true&geometryType=esriGeometryEnvelope&geometry=" + ext + "&time=" + start + "," + end + "&f=pjson";
-        console.log(url);
+        //console.log(url);
         return url;
       }
 
@@ -506,10 +474,10 @@
         });
         request.then(
           function (response) {
-            console.log(response);
+            //console.log(response);
             var count = [];
-            //Create graphics from response features
-            var features = arr.map(response.features, function (feature, i) {
+            // create graphics from response features
+            var features = array.map(response.features, function (feature, i) {
                 var newFeature = {};
                 var geometry;
                 var attributes = {};
@@ -524,10 +492,12 @@
                 newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
               })
-              //Calculate min/max count value to adjust renderer
+              
+            // calculate min/max count value to adjust renderer
             maxValue = Math.max.apply(null, count);
             minValue = Math.min.apply(null, count);
-            //Add features to respective layer and adjust renderer
+            
+            // add features to respective layer and adjust renderer
             if (dojo.byId("heatmap").checked == true) {
               var layer = map.getLayer("heatmap");
               layer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
@@ -535,7 +505,8 @@
               var layer = map.getLayer("FSAggregations");
               layer.renderer.normalizationTotal = maxValue;
             }
-            //Update features in the client side layer
+
+            // update features in the client side layer
             map.getLayer("FSAggregations").clear();
             map.getLayer("heatmap").clear();
             map.getLayer("heatmap").refresh();
@@ -544,6 +515,7 @@
                 layer.refresh();
               });
           },
+
           function (error) {
             console.log("Error querying the aggregations: ", error.message);
           });
@@ -554,7 +526,7 @@
       //
 
       //
-      //TimeSlider (init & update incl. labels)
+      // time slider (init & update incl. labels)
       //
       function initTimeSlider() {
         timeSlider = new TimeSlider({
@@ -572,7 +544,8 @@
             getFSAggregation();
           };
         });
-        //add labels for every other time stop
+
+        // add labels for every other time stop
         var labels = createLabels();
         timeSlider.setLabels(labels);
       }
@@ -584,7 +557,7 @@
           timeSlider.setThumbIndexes([0, 21]);
           timeSlider.startup();
           map.setTimeSlider(timeSlider);
-          //add labels for every other time stop
+          // add labels for every other time stop
           var labels = createLabels();
           timeSlider.setLabels(labels);
           domStyle.set(dom.byId('timeSlider'), "display", 'block');
@@ -593,7 +566,7 @@
         }, 1000);
       };
 
-      //Timeslider labels
+      // time slider labels
       function createLabels() {
         var labels = array.map(timeSlider.timeStops, function (timeStop, i) {
           if (i % 2 === 0) {
@@ -638,15 +611,20 @@
 
 <body>
   <div id="map"></div>
+  <div class="collapser">
+    <i id="collapserIcon" class="flat-chevron-down"></i>
+    <i id="expanderIcon" class="flat-chevron-up"></i>
+  </div>
   <div id="controls">
     <div style="margin-left: 10px;">
       <b>Service URL:</b>
       <input type="text" id="inputUrl" value="http://storm.esri.com:6080/arcgis/rest/services/faa-4326-hex-flat/MapServer/0" style="width: 700px; margin-bottom: 5px" />
       <input type="button" class="button" id="addFSLayer" value="Add Layer" />
-      <table id="settingsTable" class="settingsTable">
+      <div class="tableContainer">
+      <table id="settingsTable" class="settingsTable" width="1000px">
         <th>Aggregation Settings</th>
         <tr>
-          <td>
+          <td width="30%">
             <table class="settingsTable">
               <tr>
                 <td>LOD:</td>
@@ -663,8 +641,8 @@
 
             </table>
           </td>
-          <td>
-            <table class="settingsTable">
+          <td width="30%">
+            <table class="settingsTable" >
               <tr>
                 <td>GeoHash Style:</td>
                 <td>
@@ -690,28 +668,30 @@
               </tr>
             </table>
           </td>
-          <td>
-            <table class="settingsTable">
+          <td width="30%">
+            <table class="settingsTable" id="modeTable">
               <tr>
                 <td>
-                  <center>Mode:
-                    <form id="refreshMode" style="border:1px;border-style:solid;padding:1px">
-                      <input type="radio" name="mode" value="manual" checked> Manual
-                      <br>
-                      <input type="radio" name="mode" value="live"> Live
-                      <br>
-                      <input type="radio" name="mode" value="replay"> Replay
-                    </form>
-                  </center>
+                  Mode:
                 </td>
-                <td style="width:1000px;">
-                  <div id="timeSlider"></div>
+                <td>
+                  <form id="refreshMode" style="border:1px;border-style:solid;padding:1px">
+                    <input type="radio" name="mode" value="manual" checked> Manual
+                    <br>
+                    <input type="radio" name="mode" value="live"> Live
+                    <br>
+                    <input type="radio" name="mode" value="replay"> Replay
+                  </form>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
       </table>
+    </div>
+    <div class="timeSlideContainer">
+      <div id="timeSlider"></div>
+    </div>
     </div>
   </div>
 </body>
