@@ -89,7 +89,7 @@
 
       parser.parse();
 
-      //### global variables ###
+      // ### global variables ###
       var map;
       var timePara;
       var replay = false;
@@ -121,7 +121,7 @@
       }, "basemapGallery");
       basemapGallery.startup();
 
-      //### On Map load continue ###
+      // ### On Map load continue ###
 
       map.on("load", function () {
         getLayerTimeInfo();
@@ -129,7 +129,7 @@
         addAggregationLayer();
       });
 
-      //### Issue new query on extent-change if live mode is disabled ###
+      // ### Issue new query on extent-change if live mode is disabled ###
 
       map.on("extent-change", function (evt) {
         if (map.getLayer("FSAggregations") && !ignoreChangeEvent && live == false) {
@@ -141,11 +141,11 @@
       // UI Related functions
       //#############################################################################################
 
-      //### UI event listener ###
+      // ### UI event listener ###
 
       var layersVisibility = true;
       on(dojo.byId("layersToggle"), "click", function () {
-        //toggle section visibility
+        // toggle section visibility
         if (layersVisibility) {
           domClass.add(dojo.byId("layersSection"), "section-hidden");
           domClass.replace(domQuery("#layersToggle i")[0], "fa-chevron-down", "fa-chevron-up");
@@ -157,7 +157,7 @@
       });
       var aggSettingsVisibility = true;
       on(dojo.byId("aggSettingsToggle"), "click", function () {
-        //toggle section visibility
+        // toggle section visibility
         if (aggSettingsVisibility) {
           domClass.add(dojo.byId("aggSettingsSection"), "section-hidden");
           domClass.replace(domQuery("#aggSettingsToggle i")[0], "fa-chevron-down", "fa-chevron-up");
@@ -169,7 +169,7 @@
       });
       var streamingModeVisibility = true;
       on(dojo.byId("streamingModeToggle"), "click", function () {
-        //toggle section visibility
+        // toggle section visibility
         if (streamingModeVisibility) {
           domClass.add(dojo.byId("streamingModeSection"), "section-hidden");
           domClass.replace(domQuery("#streamingModeToggle i")[0], "fa-chevron-down", "fa-chevron-up");
@@ -205,7 +205,7 @@
         domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
       }
 
-      //### Switch change functions ###
+      // ### Switch change functions ###
 
       function toggleMode(evt) {
         //console.log(evt.target.value);
@@ -400,7 +400,7 @@
       //#############################################################################################
 
 
-      //### Add Aggregation Layer ###
+      // ### Add Aggregation Layer ###
 
       function addAggregationLayer() {
         var layerDefinition = {
@@ -450,7 +450,7 @@
         updateLayerFields(false);
       };
 
-      //### Heat Map Feature Layer ###
+      // ### Heat Map Feature Layer ###
 
       function createHeatmapLayer() {
         var layerDefinition = {
@@ -494,7 +494,7 @@
         //console.log("Heatmap Layer added");
       };
 
-      //### FeatureLayer Time Info query###
+      // ### FeatureLayer Time Info query###
 
       function getLayerTimeInfo() {
         var url = dojo.byId("inputUrl").value + "?f=json";
@@ -518,13 +518,13 @@
       //
       function createRenderer(type) {
 
-        //### Aggregation Renderer ###
+        // ### Aggregation Renderer ###
         if (type == "Aggregation") {
-          //Define default symbol
+          // define default symbol
           var symbol = new SimpleFillSymbol();
           symbol.setColor(new Color([150, 150, 150, 0.3]))
             .setOutline(new SimpleLineSymbol().setColor(new Color("white")).setWidth(0.3));
-          //Function to create symbol for breaks with a given color
+          // function to create symbol for breaks with a given color
           function createSymbol(color) {
             return new SimpleFillSymbol()
               .setColor(color)
@@ -534,7 +534,7 @@
           };
           classColorInfo = [];
 
-          // Define breaks and color
+          // define breaks and color
           var renderer = new ClassBreaksRenderer({
             field: "Weight",
             defaultSymbol: symbol,
@@ -579,7 +579,7 @@
           });
 
 
-          //### HeatMap Renderer ###
+          // ### HeatMap Renderer ###
         } else if (type == "Heatmap") {
           var renderer = new HeatmapRenderer({
             colorStops: [
@@ -627,7 +627,7 @@
             field: "Weight"
           });
 
-          //### Add Labels ###
+          // ### Add Labels ###
         } else if (type == "Label") {
 
           // create a text symbol and renderer to define the style of labels
@@ -651,13 +651,13 @@
       // BDS FS Aggregation Query
       //#############################################################################################
       function buildQueryUrlFromUI() {
+        var start = 0;
+        var end = new Date().getTime();
         if (replay) {
-          var start = timePara.startTime.getTime();
-          var end = timePara.endTime.getTime();
-        } else {
-          var start = 0;
-          var end = new Date().getTime();
-        };
+          start = timePara.startTime.getTime();
+          end = timePara.endTime.getTime();
+        }
+
         var ext = encodeURIComponent(JSON.stringify(map.extent.toJson()));
         var lod = dojo.byId("lod").value;
         var style = dojo.byId("aggStyle").value;
@@ -666,8 +666,8 @@
             lod = (parseInt(lod) + 5).toString();
           } else if (style == "flatTriangle" || style == "pointyTriangle") {
             lod = (parseInt(lod) + 4).toString();
-          };
-        };
+          }
+        }
 
         var url = dojo.byId("inputUrl").value;
         url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true&geometryType=esriGeometryEnvelope&geometry=" + ext + "&time=" + start + "," + end + "&f=pjson";
@@ -698,7 +698,7 @@
             //console.log(response);
             var weightsArray = [];
 
-            // Create features (graphics) from the response features
+            // create features (graphics) from the response features
             var features = array.map(response.features, function (feature, i) {
                 var newFeature = {};
                 var geometry;
@@ -727,11 +727,11 @@
                 return newFeature;
               });
 
-            // Calculate min and max count values to adjust renderer
+            // calculate min and max count values to adjust renderer
             maxValue = Math.max.apply(null, weightsArray);
             minValue = Math.min.apply(null, weightsArray);
 
-            // Add features to respective layer and adjust renderer
+            // add features to respective layer and adjust renderer
             if (dojo.byId("heatmap").checked == true) {
               var layer = map.getLayer("heatmap");
               layer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
@@ -740,7 +740,7 @@
               layer.renderer.normalizationTotal = maxValue;
             }
 
-            // Update features in the client side layer
+            // update features in the client side layer
             map.getLayer("FSAggregations").clear();
             map.getLayer("heatmap").clear();
             map.getLayer("heatmap").refresh();
@@ -753,13 +753,15 @@
             console.log("Error querying the aggregations: ", error.message);
           });
       }
+
+
       //#############################################################################################
       //Other Functions
       //#############################################################################################
       //
 
       //
-      //TimeSlider (init & update incl. labels)
+      // Time Slider (init & update incl. labels)
       //
       function initTimeSlider() {
         timeSlider = new TimeSlider({
@@ -777,7 +779,7 @@
             updateLayerFromUIChange();
           };
         });
-        //add labels for every other time stop
+        // add labels for every other time stop
         var labels = createLabels();
         timeSlider.setLabels(labels);
       }
@@ -789,7 +791,7 @@
           timeSlider.setThumbIndexes([0, 21]);
           timeSlider.startup();
           map.setTimeSlider(timeSlider);
-          //add labels for every other time stop
+          // add labels for every other time stop
           var labels = createLabels();
           timeSlider.setLabels(labels);
           domStyle.set(dom.byId('timeSlider'), "display", 'block');
@@ -798,7 +800,7 @@
         }, 1000);
       };
 
-      //Timeslider labels
+      // time slider labels
       function createLabels() {
         var labels = array.map(timeSlider.timeStops, function (timeStop, i) {
           if (i % 2 === 0) {
