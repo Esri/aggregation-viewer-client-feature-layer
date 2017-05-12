@@ -34,12 +34,16 @@
   <script src="https://js.arcgis.com/3.19/"></script>
   <script>
     require([
+      "dojo/parser",
       "dojo/dom",
       "dojo/dom-style",
       "dojo/dom-class",
       "dojo/on",
       "dojo/json",
       "dojo/_base/array",
+      "dojo/number",
+
+      "dijit/form/Select",
 
       "esri/map",
       "esri/graphic",
@@ -63,14 +67,18 @@
       "esri/renderers/ClassBreaksRenderer",
 
       "dojo/domReady!"
-    ], function (dom, domStyle, domClass, on, JSON, array,
-                 Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
-                 FeatureLayer, LabelClass,
-                 SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
-                 TimeSlider,
-                 HeatmapRenderer, ClassBreaksRenderer) {
+    ], function (
+      parser, dom, domStyle, domClass, on, JSON, array, number,
+      Select,
+      Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
+      FeatureLayer, LabelClass,
+      SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
+      TimeSlider,
+      HeatmapRenderer, ClassBreaksRenderer) {
 
-      //### global variables ###
+      parser.parse();
+
+      // ### global variables ###
       var map;
       var timePara;
       var replay = false;
@@ -95,7 +103,7 @@
         showLabels: true
       });
 
-      //### On Map load continue ###
+      // ### On Map load continue ###
 
       map.on("load", function () {
         getLayerTimeInfo();
@@ -103,11 +111,11 @@
         addAggregationLayer();
       });
 
-      //### Issue new query on extent-change if live mode is disabled ###
+      // ### Issue new query on extent-change if live mode is disabled ###
 
       map.on("extent-change", function (evt) {
         if (map.getLayer("FSAggregations") && !ignoreChangeEvent && live == false) {
-          getFSAggregation();
+          updateLayerFromUIChange();
         };
       });
 
@@ -115,7 +123,7 @@
       // UI Related functions
       //#############################################################################################
 
-      //### UI event listener ###
+      // ### UI event listener ###
 
       on(dojo.byId("addFSLayer"), "click", function () {
         getLayerTimeInfo();
@@ -129,6 +137,10 @@
       on(dojo.byId("aggStyle"), "change", toggleRefresh);
       on(dojo.byId("lod"), "change", toggleRefresh);
       on(dojo.byId("blurRadius"), "change", toggleRefresh);
+      on(dom.byId("useStats"), "change", toggleStats);
+
+      on(dijit.byId("statField"), "change", statFieldChanged);
+      on(dijit.byId("statType"), "change", updateLayerFromUIChange);
 
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
@@ -136,7 +148,7 @@
         domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
       }
 
-      //### Switch change functions ###
+      // ### Switch change functions ###
 
       function toggleMode(evt) {
         //console.log(evt.target.value);
@@ -147,7 +159,7 @@
           domStyle.set(dom.byId('timeSlider'), "display", 'none');
           map.setTimeSlider(null);
           map.setTimeExtent(null);
-          getFSAggregation();
+          updateLayerFromUIChange();
         } else if (evt.target.value == "live") {
           live = true;
           replay = false;
@@ -187,13 +199,145 @@
         } else {
           dojo.byId("radius").style.visibility = "hidden";
         }
-        getFSAggregation();
+        updateLayerFromUIChange();
       }
 
       function toggleRefresh(evt) {
         if (live == false) {
-          getFSAggregation();
+          updateLayerFromUIChange();
         }
+      }
+
+      function toggleStats(evt) {
+        if (evt.srcElement.id == "useStats") {
+          if (dojo.byId("useStats").checked == true) {
+            dojo.byId("statField").style.display = "block";
+            dojo.byId("statType").style.display = "block";
+          } else {
+            dojo.byId("statField").style.display = "none";
+            dojo.byId("statType").style.display = "none";
+          }
+          updateLayerFromUIChange();
+        }
+      }
+
+      function statFieldChanged(val) {
+        var control = dijit.byId('statField');
+        var selectedOption = control.getOptions(val);
+        populateStatTypeSelectOptions(selectedOption);
+        updateLayerFromUIChange();
+      }
+
+      function populateStatTypeSelectOptions(selectedOption) {
+        var statTypeSelect = dijit.byId("statType");
+        var prevStatType = statTypeSelect.value;
+
+        // clear statTypeSelect
+        statTypeSelect.removeOption(statTypeSelect.getOptions());
+
+        // find the field by name
+        var fieldName = dijit.byId("statField").value;
+        var field = null;
+        for (i = 0; i < layerFields.length; i++) {
+          var currentField = layerFields[i];
+          if (currentField.name == fieldName)
+            field = currentField;
+        }
+
+        // add the stat type options
+        var statTypeOptions = null;
+        if (isFieldNumeric(field)) {
+          // add all types
+          var options = [ {'label':'Average', 'value':'avg'},
+                          {'label':'Maximum', 'value':'max'},
+                          {'label':'Minimum', 'value':'min'},
+                          {'label':'Standard Deviation', 'value':'stddev'},
+                          {'label':'Sum', 'value':'sum'},
+                          {'label':'Variance', 'value':'var'},
+                          {'label':'Count Distinct', 'value':'countdistinct'},
+                          {'label':'Count', 'value':'count'} ];
+          statTypeSelect.addOption(options);
+        } else {
+          // add only the count and count distince types
+          var options = [ {'label':'Count Distinct', 'value':'countdistinct'},
+                          {'label':'Count', 'value':'count'} ];
+          statTypeSelect.addOption(options);
+        }
+
+        updateLayerFromUIChange();
+      }
+
+      function updateLayerFields(numericOnly) {
+        var url = dojo.byId("inputUrl").value;
+        var mapServiceInfoDeferred = esri.request({
+          url: url,
+          content: {
+            f: 'json'
+          },
+          callbackParamName: "callback"
+        });
+        mapServiceInfoDeferred.then(function (response) {
+              layerFields = response.fields;
+              populateDijitSelectWithLayerFields(dijit.byId('statField'), numericOnly);
+              statFieldChanged(dijit.byId('statField').value); // to init-populate the stat types control
+            }
+        );
+      }
+
+      function populateDijitSelectWithLayerFields(select, numericOnly) {
+        // clear exiting options
+        select.removeOption(select.getOptions());
+
+        // populate options based on the layerFields array
+        var i;
+        for (i = 0; i < layerFields.length; i++) {
+          var field = layerFields[i];
+          var fieldType = field.type.substring(13);
+          var option = {'label': field.name + "&nbsp;&nbsp;" + "<em class='fieldTypeSelect'>" + fieldType + '</em>', 'value': field.name, 'type': field.type };
+          if (numericOnly) {
+            if (isFieldNumeric(field))
+              select.addOption(option);
+          } else {
+            if (isSupportedStatField(field))
+              select.addOption(option);
+          }
+        }
+      }
+
+      function populateSelectWithLayerFields(select, numericOnly) {
+        // clear exiting options
+        var i;
+        for (i = select.options.length - 1; i >= 0; i--) {
+          select.remove(i);
+        }
+
+        // populate options based on the layerFields array
+        var pos = 0;
+        for (i = 0; i < layerFields.length; i++) {
+          var field = layerFields[i];
+          if (numericOnly) {
+            if (isFieldNumeric(field))
+              select.options[pos++] = new Option(field.name, field.name);
+          } else {
+            if (isSupportedStatField(field))
+              select.options[pos++] = new Option(field.name, field.name);
+          }
+        }
+      }
+
+      // field type can be one of the following: "esriFieldTypeSmallInteger", "esriFieldTypeInteger", "esriFieldTypeSingle", "esriFieldTypeDouble", "esriFieldTypeString", "esriFieldTypeDate", "esriFieldTypeOID", "esriFieldTypeGeometry", "esriFieldTypeBlob", "esriFieldTypeRaster", "esriFieldTypeGUID", "esriFieldTypeGlobalID", "esriFieldTypeXML"
+      function isFieldNumeric(field) {
+          if (!field || !field.type)
+            return false;
+
+          return (field.type == "esriFieldTypeSmallInteger" || field.type == "esriFieldTypeInteger" || field.type == "esriFieldTypeSingle" || field.type == "esriFieldTypeDouble" || field.type == "esriFieldTypeOID");
+      }
+
+      function isSupportedStatField(field) {
+          if (!field || !field.type)
+            return false;
+
+          return (field.type != "esriFieldTypeGeometry" && field.type != "esriFieldTypeBlob" && field.type != "esriFieldTypeRaster")
       }
 
 
@@ -202,7 +346,7 @@
       //#############################################################################################
 
 
-      //### Add Aggregation Layer ###
+      // ### Add Aggregation Layer ###
 
       function addAggregationLayer() {
         var layerDefinition = {
@@ -219,6 +363,10 @@
             "name": "Count",
             "type": "esriFieldTypeInteger",
             "alias": "Count"
+                }, {
+            "name": "Weight",
+            "type": "esriFieldTypeDouble",
+            "alias": "Weight"
                 }, {
             "name": "Geometry",
             "type": "esriFieldTypeGeometry",
@@ -237,15 +385,18 @@
           infoTemplate: infoTemplate,
           outFields: ["*"]
         });
+
         FSAggregationLayer.setRenderer(createRenderer("Aggregation"));
         var label = createRenderer("Label");
         FSAggregationLayer.setLabelingInfo([label]);
         map.addLayer(FSAggregationLayer);
         //console.log("Client FS Aggregation Layer added");
-        getFSAggregation();
+        updateLayerFromUIChange();
+
+        updateLayerFields(false);
       };
 
-      //### Heat Map Feature Layer ###
+      // ### Heat Map Feature Layer ###
 
       function createHeatmapLayer() {
         var layerDefinition = {
@@ -263,15 +414,21 @@
             "type": "esriFieldTypeInteger",
             "alias": "Count"
                 }, {
+            "name": "Weight",
+            "type": "esriFieldTypeDouble",
+            "alias": "Weight"
+                }, {
             "name": "geometry",
             "type": "esriFieldTypeGeometry",
             "alias": ""
                 }]
         };
+
         var featureCollection = {
           layerDefinition: layerDefinition,
           featureSet: null
         };
+
         var heatmapLayer = new FeatureLayer(featureCollection, {
           id: "heatmap",
           objectIdField: "objectid",
@@ -283,7 +440,7 @@
         //console.log("Heatmap Layer added");
       };
 
-      //### FeatureLayer Time Info query###
+      // ### FeatureLayer Time Info query###
 
       function getLayerTimeInfo() {
         var url = dojo.byId("inputUrl").value + "?f=json";
@@ -307,13 +464,13 @@
       //
       function createRenderer(type) {
 
-        //### Aggregation Renderer ###
+        // ### Aggregation Renderer ###
         if (type == "Aggregation") {
-          //Define default symbol
+          // define default symbol
           var symbol = new SimpleFillSymbol();
           symbol.setColor(new Color([150, 150, 150, 0.3]))
             .setOutline(new SimpleLineSymbol().setColor(new Color("white")).setWidth(0.3));
-          //Function to create symbol for breaks with a given color
+          // function to create symbol for breaks with a given color
           function createSymbol(color) {
             return new SimpleFillSymbol()
               .setColor(color)
@@ -368,7 +525,7 @@
           });
 
         } else if (type == "Heatmap") {
-          //### HeatMap Renderer ###
+          // ### HeatMap Renderer ###
           var renderer = new HeatmapRenderer({
             colorStops: [
               {
@@ -415,7 +572,7 @@
             field: "Count"
           });
 
-          //### Add Labels ###
+          // ### Add Labels ###
         } else if (type == "Label") {
 
           // create a text symbol and renderer to define the style of labels
@@ -438,15 +595,15 @@
       //#############################################################################################
       // BDS FS Aggregation Query
       //#############################################################################################
-      function constructURL() {
+      function buildQueryUrlFromUI() {
         // get parameters from UI
+        var start = 0;
+        var end = new Date().getTime();
         if (replay) {
-          var start = timePara.startTime.getTime();
-          var end = timePara.endTime.getTime();
-        } else {
-          var start = 0;
-          var end = new Date().getTime();
-        };
+          start = timePara.startTime.getTime();
+          end = timePara.endTime.getTime();
+        }
+        
         var ext = encodeURIComponent(JSON.stringify(map.extent.toJson()));
         var lod = dojo.byId("lod").value;
         var style = dojo.byId("aggStyle").value;
@@ -455,18 +612,28 @@
             lod = (parseInt(lod) + 5).toString();
           } else if (style == "flatTriangle" || style == "pointyTriangle") {
             lod = (parseInt(lod) + 4).toString();
-          };
-        };
+          }
+        }
 
-        // construct URL for aggregation query
         var url = dojo.byId("inputUrl").value;
         url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true&geometryType=esriGeometryEnvelope&geometry=" + ext + "&time=" + start + "," + end + "&f=pjson";
+
+        if (dojo.byId("useStats").checked == true) {
+          var outStatisticsObj = [ {
+            "statisticType": dijit.byId("statType").value,
+            "onStatisticField": dijit.byId("statField").value,
+            "outStatisticFieldName": dijit.byId("statField").value + "_" + dijit.byId("statType").value
+          } ];
+          var outStatisticsStr = JSON.stringify(outStatisticsObj);
+          url += "&outStatistics=" + encodeURIComponent(outStatisticsStr);
+        }
+
         //console.log(url);
         return url;
       }
 
-      function getFSAggregation() {
-        var url = constructURL();
+      function updateLayerFromUIChange() {
+        var url = buildQueryUrlFromUI();
         var request = esriRequest({
           "url": url,
           "handleAs": "json",
@@ -475,28 +642,41 @@
         request.then(
           function (response) {
             //console.log(response);
-            var count = [];
-            // create graphics from response features
+            var weightsArray = [];
+
+            // create features (graphics) from the response features
             var features = array.map(response.features, function (feature, i) {
                 var newFeature = {};
                 var geometry;
                 var attributes = {};
-                count.push(feature.attributes.Count);
+
                 geometry = new Polygon(feature.geometry)
                 if (!geometry.hasOwnProperty('spatialReference') || !geometry['spatialReference']) {
                   geometry['spatialReference'] = sr;
-                };
+                }
+
                 if (dojo.byId("heatmap").checked == true) {
                   geometry = geometry.getCentroid();
-                };
+                }
+
+                var weight = 0;
+                if (dojo.byId("useStats").checked == true) {
+                  var weightFieldName = dijit.byId("statField").value + "_" + dijit.byId("statType").value;
+                  weight = feature.attributes[weightFieldName];
+                } else {
+                  weight = feature.attributes["Count"];
+                }
+                feature.attributes["Weight"] = number.round(weight, 2);
+                weightsArray.push(weight);
+
                 newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
               })
-              
-            // calculate min/max count value to adjust renderer
-            maxValue = Math.max.apply(null, count);
-            minValue = Math.min.apply(null, count);
-            
+
+            // calculate min and max count values to adjust renderer
+            maxValue = Math.max.apply(null, weightsArray);
+            minValue = Math.min.apply(null, weightsArray);
+
             // add features to respective layer and adjust renderer
             if (dojo.byId("heatmap").checked == true) {
               var layer = map.getLayer("heatmap");
@@ -515,13 +695,14 @@
                 layer.refresh();
               });
           },
-
           function (error) {
             console.log("Error querying the aggregations: ", error.message);
           });
       }
+
+
       //#############################################################################################
-      //Other Functions
+      // Other Functions
       //#############################################################################################
       //
 
@@ -541,7 +722,7 @@
         timeSlider.on("time-extent-change", function () {
           if (!ignoreChangeEvent) {
             timePara = timeSlider.getCurrentTimeExtent();
-            getFSAggregation();
+            updateLayerFromUIChange();
           };
         });
 
@@ -561,7 +742,7 @@
           var labels = createLabels();
           timeSlider.setLabels(labels);
           domStyle.set(dom.byId('timeSlider'), "display", 'block');
-          getFSAggregation();
+          updateLayerFromUIChange();
           ignoreChangeEvent = false;
         }, 1000);
       };
@@ -598,7 +779,7 @@
 
       function autoUpdate() {
         setTimeout(function () {
-          getFSAggregation();
+          updateLayerFromUIChange();
           if (live) {
             autoUpdate();
           };
@@ -622,9 +803,8 @@
       <input type="button" class="button" id="addFSLayer" value="Add Layer" />
       <div class="tableContainer">
       <table id="settingsTable" class="settingsTable" width="1000px">
-        <th>Aggregation Settings</th>
         <tr>
-          <td width="30%">
+          <td width="20%">
             <table class="settingsTable">
               <tr>
                 <td>LOD:</td>
@@ -668,7 +848,23 @@
               </tr>
             </table>
           </td>
-          <td width="30%">
+          <td width="25%">
+            <table class="settingsTable" id="statsTable">
+              <tr>
+                Statistics:
+                <input type="checkbox" id="useStats" style="top:4px;"/>
+              </tr>
+              <tr>
+                <select name="statField" data-dojo-type="dijit/form/Select" data-dojo-attach-point="statField" id="statField" style="width: 100%; margin-top:3px; display:none; float:left;">
+                </select>
+              </tr>
+              <tr>
+                <select name="statType"  data-dojo-type="dijit/form/Select" data-dojo-attach-point="statType" id="statType" style="width: 100%; margin-top:3px; display:none; float:left;">
+                </select>
+              </tr>
+            </table>
+          </td>
+          <td width="25%">
             <table class="settingsTable" id="modeTable">
               <tr>
                 <td>

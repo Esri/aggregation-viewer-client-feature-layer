@@ -52,16 +52,41 @@ body {
   padding: 1px 2px;
 }
 
+.dijitNumberTextBox .dijitUpArrowButton .dijitArrowButtonInner:before{
+  font-family: 'flat-icon';
+  content: "\f003";
+  position: relative;
+  bottom: 2px;
+}
+
+.dijitNumberTextBox .dijitDownArrowButton .dijitArrowButtonInner:before{
+  font-family: 'flat-icon';
+  content: "\f002";
+  position: relative;
+  bottom: 3px;
+}
+
+.dijitDownArrowButton .dijitDownArrowButton:before{
+  font-family: 'flat-icon';
+  content: "\f002";
+  position: relative;
+  bottom: 0px;
+  font-size: 15px;
+}
+
+.dijitDownArrowButton .dijitDownArrowButton .dijitArrowButtonInner{
+  display: none;
+}
 
 .collapser {
-    position: absolute;
-    width: 2.7rem;
-    height: 2.7rem;
-    left: 0px;
-    bottom: 130px;
-    font-size: 2.7rem;
-    background: #FAFAFA;
-    cursor: pointer;
+  position: absolute;
+  width: 2.7rem;
+  height: 2.7rem;
+  left: 0px;
+  bottom: 130px;
+  font-size: 2.7rem;
+  background: #FAFAFA;
+  cursor: pointer;
 }
 
 #expanderIcon {
@@ -123,4 +148,8 @@ body.panel-collapsed .collapser {
   width: 800px;
   float: left;
   transform: translateX(-40px);
+}
+
+.fieldTypeSelect{
+  color:#0000ff;
 }
