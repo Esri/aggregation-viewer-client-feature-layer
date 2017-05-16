@@ -90,7 +90,7 @@
 
       // ### global variables ###
       var map;
-      var timePara;
+      var layerTimeExtent;
       var replay = false;
       var live = false;
       var startTimeSlider = true;
@@ -106,6 +106,7 @@
       esri.config.defaults.io.corsEnabledServers.push('http://storm.esri.com');
       esri.config.defaults.io.corsEnabledServers.push('http://storm.esri.com:6080');
       esri.config.defaults.io.corsEnabledServers.push('https://storm.esri.com:6443');
+      esri.config.defaults.io.corsEnabledServers.push('http://localhost:9000');
 
       map = new Map("map", {
         basemap: "gray",
@@ -122,16 +123,12 @@
 
       // ### On Map load continue ###
 
-      map.on("load", function () {
-        getLayerTimeInfo();
-        createHeatmapLayer();
-        addAggregationLayer();
-      });
+      map.on("load", addLayers);
 
       // ### Issue new query on extent-change if live mode is disabled ###
 
       map.on("extent-change", function (evt) {
-        if (map.getLayer("FSAggregations") && !ignoreChangeEvent && live == false) {
+        if (map.getLayer("aggregations") && !ignoreChangeEvent && live == false) {
           updateLayerFromUIChange();
         };
       });
@@ -179,13 +176,7 @@
         streamingModeVisibility = !streamingModeVisibility;
       });
 
-      on(dojo.byId("addFSLayer"), "click", function () {
-        getLayerTimeInfo();
-        setTimeout(function () {
-          addAggregationLayer();
-        }, 1000);
-      });
-
+      on(dojo.byId("addLayerButton"), "click", addLayers);
       on(dojo.byId("heatmap"), "change", toggleHeatmap);
       on(dojo.byId("refreshMode"), "change", toggleMode);
       on(dojo.byId("autoOffSet"), "change", toggleRefresh);
@@ -199,6 +190,24 @@
 
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
+
+      function addLayers() {
+
+        // remove existing layers
+        var aggregationsLayer = map.getLayer("aggregations");
+        if (aggregationsLayer)
+          map.removeLayer(aggregationsLayer);
+
+        var heatmapLayer = map.getLayer("heatmap");
+        if (heatmapLayer)
+          map.removeLayer(heatmapLayer);
+
+        queryLayerTimeExtent();
+        addHeatmapLayer();
+        setTimeout(function () {
+          addAggregationsLayer();
+        }, 1000);
+      }
 
       function togglePanel() {
         domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
@@ -401,48 +410,50 @@
 
       // ### Add Aggregation Layer ###
 
-      function addAggregationLayer() {
+      function addAggregationsLayer() {
         var layerDefinition = {
           "geometryType": "esriGeometryPolygon",
-          "fields": [{
-            "name": "objectid",
-            "type": "esriFieldTypeInteger",
-            "alias": "objectid"
-                }, {
-            "name": "Geohash",
-            "type": "esriFieldTypeString",
-            "alias": "Geohash"
-                }, {
-            "name": "Count",
-            "type": "esriFieldTypeInteger",
-            "alias": "Count"
-                }, {
-            "name": "Weight",
-            "type": "esriFieldTypeDouble",
-            "alias": "Weight"
-                }, {
-            "name": "Geometry",
-            "type": "esriFieldTypeGeometry",
-            "alias": "Geometry"
-                }]
+          "fields": [
+            {
+              "name": "objectid",
+              "type": "esriFieldTypeInteger",
+              "alias": "objectid"
+            }, {
+              "name": "Geohash",
+              "type": "esriFieldTypeString",
+              "alias": "Geohash"
+            }, {
+              "name": "Count",
+              "type": "esriFieldTypeInteger",
+              "alias": "Count"
+            }, {
+              "name": "Weight",
+              "type": "esriFieldTypeDouble",
+              "alias": "Weight"
+            }, {
+              "name": "Geometry",
+              "type": "esriFieldTypeGeometry",
+              "alias": "Geometry"
+            }
+          ]
         };
         var featureCollection = {
           layerDefinition: layerDefinition,
           featureSet: null
         };
         var infoTemplate = new InfoTemplate("Attributes", "${*}");
-        var FSAggregationLayer = new FeatureLayer(featureCollection, {
-          id: "FSAggregations",
+        var aggregationsLayer = new FeatureLayer(featureCollection, {
+          id: "aggregations",
           objectIdField: "objectid",
           showLabels: true,
           infoTemplate: infoTemplate,
           outFields: ["*"]
         });
 
-        FSAggregationLayer.setRenderer(createRenderer("Aggregation"));
+        aggregationsLayer.setRenderer(createRenderer("Aggregation"));
         var label = createRenderer("Label");
-        FSAggregationLayer.setLabelingInfo([label]);
-        map.addLayer(FSAggregationLayer);
+        aggregationsLayer.setLabelingInfo([label]);
+        map.addLayer(aggregationsLayer);
         //console.log("Client FS Aggregation Layer added");
         updateLayerFromUIChange();
 
@@ -451,7 +462,7 @@
 
       // ### Heat Map Feature Layer ###
 
-      function createHeatmapLayer() {
+      function addHeatmapLayer() {
         var layerDefinition = {
           "geometryType": "esriGeometryPoint",
           "fields": [{
@@ -488,6 +499,7 @@
           visible: true,
           opacity: 1
         });
+
         heatmapLayer.setRenderer(createRenderer("Heatmap"));
         map.addLayer(heatmapLayer);
         //console.log("Heatmap Layer added");
@@ -495,7 +507,7 @@
 
       // ### FeatureLayer Time Info query###
 
-      function getLayerTimeInfo() {
+      function queryLayerTimeExtent() {
         var url = dojo.byId("inputUrl").value + "?f=json";
         var request = esriRequest({
           "url": url,
@@ -504,7 +516,7 @@
         });
         request.then(
           function (response) {
-            timePara = new TimeExtent(new Date(response.timeInfo.timeExtent[0]), new Date(response.timeInfo.timeExtent[1]));
+            layerTimeExtent = new TimeExtent(new Date(response.timeInfo.timeExtent[0]), new Date(response.timeInfo.timeExtent[1]));
           },
           function (error) {
             console.log("Error getting the layers time extent: ", error.message);
@@ -516,7 +528,6 @@
       //#############################################################################################
       //
       function createRenderer(type) {
-
         // ### Aggregation Renderer ###
         if (type == "Aggregation") {
           // define default symbol
@@ -544,37 +555,38 @@
                 minValue: 0,
                 maxValue: 10,
                 symbol: createSymbol(new Color([254, 240, 217, 0.7]))
-                                                },
+              },
               {
                 minValue: 10,
                 maxValue: 20,
                 symbol: createSymbol(new Color([253, 212, 158, 0.7]))
-                                                    },
+              },
               {
                 minValue: 20,
                 maxValue: 30,
                 symbol: createSymbol(new Color([253, 187, 132, 0.8]))
-                                                        },
+              },
               {
                 minValue: 30,
                 maxValue: 40,
                 symbol: createSymbol(new Color([252, 141, 89, 0.8]))
-                                                            },
+              },
               {
                 minValue: 40,
                 maxValue: 60,
                 symbol: createSymbol(new Color([239, 101, 72, 0.9]))
-                                                            },
+              },
               {
                 minValue: 60,
                 maxValue: 80,
                 symbol: createSymbol(new Color([215, 48, 31, 0.9]))
-                                                            },
+              },
               {
                 minValue: 80,
                 maxValue: 100,
                 symbol: createSymbol(new Color([153, 0, 0, 1]))
-                        }]
+              }
+            ]
           });
 
 
@@ -653,8 +665,8 @@
         var start = 0;
         var end = new Date().getTime();
         if (replay) {
-          start = timePara.startTime.getTime();
-          end = timePara.endTime.getTime();
+          start = layerTimeExtent.startTime.getTime();
+          end = layerTimeExtent.endTime.getTime();
         }
 
         var ext = encodeURIComponent(JSON.stringify(map.extent.toJson()));
@@ -695,6 +707,12 @@
         request.then(
           function (response) {
             //console.log(response);
+
+            var aggregationsLayer = map.getLayer("aggregations");
+            var heatmapLayer = map.getLayer("heatmap");
+            if (!aggregationsLayer || !heatmapLayer)
+              return;
+
             var weightsArray = [];
 
             // create features (graphics) from the response features
@@ -724,28 +742,32 @@
 
                 newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
-              });
+            });
 
             // calculate min and max count values to adjust renderer
             maxValue = Math.max.apply(null, weightsArray);
             minValue = Math.min.apply(null, weightsArray);
 
-            // add features to respective layer and adjust renderer
+            // add features to the respective selected layer and adjust renderer
+            var selectedLayer = null;
+            var otherLayer = null;
             if (dojo.byId("heatmap").checked == true) {
-              var layer = map.getLayer("heatmap");
-              layer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
+              selectedLayer = heatmapLayer;
+              otherLayer = aggregationsLayer;
+              heatmapLayer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
             } else {
-              var layer = map.getLayer("FSAggregations");
-              layer.renderer.normalizationTotal = maxValue;
+              selectedLayer = aggregationsLayer;
+              otherLayer = heatmapLayer;
+              aggregationsLayer.renderer.normalizationTotal = maxValue;
             }
 
-            // update features in the client side layer
-            map.getLayer("FSAggregations").clear();
-            map.getLayer("heatmap").clear();
-            map.getLayer("heatmap").refresh();
-            layer.applyEdits(features, null, null)
+            // update features in the client side selected layer
+            otherLayer.setVisibility(false);
+            selectedLayer.clear();
+            selectedLayer.setVisibility(true);
+            selectedLayer.applyEdits(features, null, null)
               .then(function () {
-                layer.refresh();
+                selectedLayer.refresh();
               });
           },
           function (error) {
@@ -768,13 +790,13 @@
         }, dom.byId("timeSlider"));
         map.setTimeSlider(timeSlider);
         timeSlider.setThumbCount(2);
-        timeSlider.createTimeStopsByCount(timePara, 21);
+        timeSlider.createTimeStopsByCount(layerTimeExtent, 21);
         timeSlider.setThumbIndexes([0, 21]);
         timeSlider.setThumbMovingRate(2000);
         timeSlider.startup();
         timeSlider.on("time-extent-change", function () {
           if (!ignoreChangeEvent) {
-            timePara = timeSlider.getCurrentTimeExtent();
+            layerTimeExtent = timeSlider.getCurrentTimeExtent();
             updateLayerFromUIChange();
           };
         });
@@ -784,9 +806,9 @@
       }
 
       function updateTimeSlider() {
-        getLayerTimeInfo();
+        queryLayerTimeExtent();
         setTimeout(function () {
-          timeSlider.createTimeStopsByCount(timePara, 21);
+          timeSlider.createTimeStopsByCount(layerTimeExtent, 21);
           timeSlider.setThumbIndexes([0, 21]);
           timeSlider.startup();
           map.setTimeSlider(timeSlider);
@@ -876,7 +898,7 @@
       </div>
       <div class="config-content">
         <input type="text" id="inputUrl" value="http://storm.esri.com:6080/arcgis/rest/services/faa-4326-hex-flat/MapServer/0" />
-        <input type="button" class="button" id="addFSLayer" value="Add Layer" />
+        <input type="button" class="button" id="addLayerButton" value="Add Layer" />
       </div>
     </section>
 
@@ -904,12 +926,12 @@
           <label for="lod">LOD</label>
         </div>
         <div class="input-group">
-          <input type="checkbox" id="heatmap" />
-          <label for="heatmap">Heatmap</label>
-        </div>
-        <div class="input-group">
           <input type="checkbox" id="autoOffSet" checked="true" />
           <label for="autoOffSet">Auto LOD offset</label>
+        </div>
+        <div class="input-group">
+          <input type="checkbox" id="heatmap" />
+          <label for="heatmap">Heatmap</label>
         </div>
         <div id="radius" class="input-group" style="display:none">
           <input type="number" id="blurRadius" value="10" style="width: 40px;" />
