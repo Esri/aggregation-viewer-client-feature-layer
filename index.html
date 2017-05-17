@@ -54,6 +54,7 @@
       "esri/request",
       "esri/InfoTemplate",
       "esri/TimeExtent",
+      "esri/graphicsUtils",
 
       "esri/layers/FeatureLayer",
       "esri/layers/LabelClass",
@@ -79,7 +80,7 @@
       "dojo/domReady!"
     ], function (
       parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
-      Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
+      Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent, graphicsUtils,
       FeatureLayer, LabelClass,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
       TimeSlider, BasemapGallery,
@@ -698,6 +699,8 @@
       }
 
       function updateLayerFromUIChange() {
+        var sr = new SpatialReference(102100);
+
         var url = buildQueryUrlFromUI();
         var request = esriRequest({
           "url": url,
@@ -717,14 +720,13 @@
 
             // create features (graphics) from the response features
             var features = array.map(response.features, function (feature, i) {
-                var newFeature = {};
-                var geometry;
-                var attributes = {};
-
-                geometry = new Polygon(feature.geometry)
-                if (!geometry.hasOwnProperty('spatialReference') || !geometry['spatialReference']) {
-                  geometry['spatialReference'] = sr;
+                // make sure the geometry has the correct spatial reference
+                if (feature && feature.geometry && (!feature.geometry.hasOwnProperty('spatialReference') || !feature.geometry['spatialReference'])) {
+                  feature.geometry['spatialReference'] = sr;
                 }
+
+                // create the polygon
+                var geometry = new Polygon(feature.geometry);
 
                 if (dojo.byId("heatmap").checked == true) {
                   geometry = geometry.getCentroid();
@@ -740,13 +742,9 @@
                 feature.attributes["Weight"] = number.round(weight, 2);
                 weightsArray.push(weight);
 
-                newFeature = new Graphic(geometry, null, feature.attributes, null);
+                var newFeature = new Graphic(geometry, null, feature.attributes, null);
                 return newFeature;
             });
-
-            // calculate min and max count values to adjust renderer
-            maxValue = Math.max.apply(null, weightsArray);
-            minValue = Math.min.apply(null, weightsArray);
 
             // add features to the respective selected layer and adjust renderer
             var selectedLayer = null;
@@ -758,6 +756,10 @@
             } else {
               selectedLayer = aggregationsLayer;
               otherLayer = heatmapLayer;
+
+              // calculate min and max weight values to adjust heatmap renderer
+              minValue = Math.min.apply(null, weightsArray);
+              maxValue = Math.max.apply(null, weightsArray);
               aggregationsLayer.renderer.normalizationTotal = maxValue;
             }
 
@@ -767,6 +769,8 @@
             selectedLayer.setVisibility(true);
             selectedLayer.applyEdits(features, null, null)
               .then(function () {
+                var layerExtent = graphicsUtils.graphicsExtent(selectedLayer.graphics).expand(1.2);
+                map.setExtent(layerExtent);
                 selectedLayer.refresh();
               });
           },
