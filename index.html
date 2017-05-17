@@ -111,8 +111,8 @@
 
       map = new Map("map", {
         basemap: "gray",
-        center: [-96, 36.428],
-        zoom: 4,
+        center: [0, 0],
+        zoom: 1,
         showLabels: true
       });
 
@@ -124,7 +124,7 @@
 
       // ### On Map load continue ###
 
-      map.on("load", addLayers);
+      map.on("load", setFeatureLayers);
 
       // ### Issue new query on extent-change if live mode is disabled ###
 
@@ -177,7 +177,7 @@
         streamingModeVisibility = !streamingModeVisibility;
       });
 
-      on(dojo.byId("addLayerButton"), "click", addLayers);
+      on(dojo.byId("setLayerButton"), "click", setFeatureLayers);
       on(dojo.byId("heatmap"), "change", toggleHeatmap);
       on(dojo.byId("refreshMode"), "change", toggleMode);
       on(dojo.byId("autoOffSet"), "change", toggleRefresh);
@@ -192,9 +192,9 @@
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
 
-      function addLayers() {
+      function setFeatureLayers() {
 
-        // remove existing layers
+        // remove existing feature layers
         var aggregationsLayer = map.getLayer("aggregations");
         if (aggregationsLayer)
           map.removeLayer(aggregationsLayer);
@@ -207,6 +207,7 @@
         addHeatmapLayer();
         setTimeout(function () {
           addAggregationsLayer();
+          updateLayerFromUIChange(true);
         }, 1000);
       }
 
@@ -455,8 +456,7 @@
         var label = createRenderer("Label");
         aggregationsLayer.setLabelingInfo([label]);
         map.addLayer(aggregationsLayer);
-        //console.log("Client FS Aggregation Layer added");
-        updateLayerFromUIChange();
+        //console.log("Client Aggregations Layer added");
 
         updateLayerFields(false);
       };
@@ -698,7 +698,7 @@
         return url;
       }
 
-      function updateLayerFromUIChange() {
+      function updateLayerFromUIChange(setMapExtent) {
         var sr = new SpatialReference(102100);
 
         var url = buildQueryUrlFromUI();
@@ -719,7 +719,7 @@
             var weightsArray = [];
 
             // create features (graphics) from the response features
-            var features = array.map(response.features, function (feature, i) {
+            var graphics = array.map(response.features, function (feature, i) {
                 // make sure the geometry has the correct spatial reference
                 if (feature && feature.geometry && (!feature.geometry.hasOwnProperty('spatialReference') || !feature.geometry['spatialReference'])) {
                   feature.geometry['spatialReference'] = sr;
@@ -742,8 +742,8 @@
                 feature.attributes["Weight"] = number.round(weight, 2);
                 weightsArray.push(weight);
 
-                var newFeature = new Graphic(geometry, null, feature.attributes, null);
-                return newFeature;
+                var graphic = new Graphic(geometry, null, feature.attributes, null);
+                return graphic;
             });
 
             // add features to the respective selected layer and adjust renderer
@@ -763,14 +763,17 @@
               aggregationsLayer.renderer.normalizationTotal = maxValue;
             }
 
-            // update features in the client side selected layer
+            // update features layer with nre features (graphics)
             otherLayer.setVisibility(false);
             selectedLayer.clear();
             selectedLayer.setVisibility(true);
-            selectedLayer.applyEdits(features, null, null)
+            selectedLayer.applyEdits(graphics, null, null)
               .then(function () {
-                var layerExtent = graphicsUtils.graphicsExtent(selectedLayer.graphics).expand(1.2);
-                map.setExtent(layerExtent);
+                if (setMapExtent && graphics.length > 0) {
+                  var layerExtent = graphicsUtils.graphicsExtent(graphics);
+                  if (layerExtent)
+                    map.setExtent(layerExtent.expand(1.0));
+                }
                 selectedLayer.refresh();
               });
           },
@@ -902,7 +905,7 @@
       </div>
       <div class="config-content">
         <input type="text" id="inputUrl" value="http://storm.esri.com:6080/arcgis/rest/services/faa-4326-hex-flat/MapServer/0" />
-        <input type="button" class="button" id="addLayerButton" value="Add Layer" />
+        <input type="button" class="button" id="setLayerButton" value="Set Layer" />
       </div>
     </section>
 
