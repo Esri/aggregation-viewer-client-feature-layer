@@ -275,7 +275,7 @@
       }
 
       function toggleStats(evt) {
-        if (evt.srcElement.id == "useStats") {
+        if (evt.target.id == "useStats") {
           if (dojo.byId("useStats").checked == true) {
             dojo.byId("statField").style.display = "block";
             dojo.byId("statType").style.display = "block";
