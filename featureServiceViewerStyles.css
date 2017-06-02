@@ -18,6 +18,25 @@ body {
   z-index: -1;
 }
 
+.basemapGallery-container {
+    position: absolute;
+    top: 20px;
+    left: 70px;
+    z-index: 50;
+}
+
+.dijitTitlePaneTitle {
+    background: white;
+    padding: 10px;
+    border: 1px solid #b8b8b8;
+    border-radius: 5px;
+}
+
+.flat .dijitContentPane {
+    border: 1px solid #b8b8b8;
+    border-radius: 5px;
+}
+
 #controls {
   position: absolute;
   bottom: 0px;

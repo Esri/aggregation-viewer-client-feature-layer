@@ -22,15 +22,19 @@
   email: contracts@esri.com
 -->
 
+<!DOCTYPE html>
+
 <html>
 
 <head lang="en">
   <meta charset="UTF-8">
+
   <title>Aggregation Viewer - Client Side Feature Layer</title>
-  <link rel="stylesheet" href="https://js.arcgis.com/3.19/dijit/themes/claro/claro.css">
+
   <link rel="stylesheet" href="https://js.arcgis.com/3.19/esri/css/esri.css">
   <link rel="stylesheet" href="./featureServiceViewerStyles.css">
 
+  <script src="https://use.fontawesome.com/9482a0b1d1.js"></script>
   <script src="https://js.arcgis.com/3.19/"></script>
   <script>
     require([
@@ -41,9 +45,8 @@
       "dojo/on",
       "dojo/json",
       "dojo/_base/array",
+      "dojo/query",
       "dojo/number",
-
-      "dijit/form/Select",
 
       "esri/map",
       "esri/graphic",
@@ -52,6 +55,7 @@
       "esri/request",
       "esri/InfoTemplate",
       "esri/TimeExtent",
+      "esri/graphicsUtils",
 
       "esri/layers/FeatureLayer",
       "esri/layers/LabelClass",
@@ -62,31 +66,40 @@
       "esri/geometry/Polygon",
 
       "esri/dijit/TimeSlider",
+      "esri/dijit/BasemapGallery",
 
       "esri/renderers/HeatmapRenderer",
       "esri/renderers/ClassBreaksRenderer",
 
+      "dijit/layout/BorderContainer",
+      "dijit/layout/ContentPane",
+      "dijit/TitlePane",
+      "dijit/TooltipDialog",
+      "dijit/form/DropDownButton",
+      "dijit/form/Select",
+
       "dojo/domReady!"
     ], function (
-      parser, dom, domStyle, domClass, on, JSON, array, number,
-      Select,
-      Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent,
+      parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
+      Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent, graphicsUtils,
       FeatureLayer, LabelClass,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
-      TimeSlider,
-      HeatmapRenderer, ClassBreaksRenderer) {
+      TimeSlider, BasemapGallery,
+      HeatmapRenderer, ClassBreaksRenderer,
+      BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton, Select) {
 
       parser.parse();
 
       // ### global variables ###
       var map;
-      var timePara;
+      var layerTimeExtent;
       var replay = false;
       var live = false;
       var startTimeSlider = true;
       var minValue;
       var maxValue;
       var ignoreChangeEvent = false;
+      var layerFields;
 
       //#############################################################################################
       // Map Related functions
@@ -95,26 +108,29 @@
       esri.config.defaults.io.corsEnabledServers.push('http://storm.esri.com');
       esri.config.defaults.io.corsEnabledServers.push('http://storm.esri.com:6080');
       esri.config.defaults.io.corsEnabledServers.push('https://storm.esri.com:6443');
+      esri.config.defaults.io.corsEnabledServers.push('http://localhost:9000');
 
       map = new Map("map", {
-        basemap: "topo",
-        center: [-96, 36.428],
-        zoom: 4,
+        basemap: "gray",
+        center: [0, 0],
+        zoom: 1,
         showLabels: true
       });
 
+      var basemapGallery = new BasemapGallery({
+        showArcGISBasemaps: true,
+        map: map
+      }, "basemapGallery");
+      basemapGallery.startup();
+
       // ### On Map load continue ###
 
-      map.on("load", function () {
-        getLayerTimeInfo();
-        createHeatmapLayer();
-        addAggregationLayer();
-      });
+      map.on("load", setFeatureLayers);
 
       // ### Issue new query on extent-change if live mode is disabled ###
 
       map.on("extent-change", function (evt) {
-        if (map.getLayer("FSAggregations") && !ignoreChangeEvent && live == false) {
+        if (map.getLayer("aggregations") && !ignoreChangeEvent && live == false) {
           updateLayerFromUIChange();
         };
       });
@@ -125,12 +141,7 @@
 
       // ### UI event listener ###
 
-      on(dojo.byId("addFSLayer"), "click", function () {
-        getLayerTimeInfo();
-        setTimeout(function () {
-          addAggregationLayer();
-        }, 1000);
-      });
+      on(dojo.byId("setLayerButton"), "click", setFeatureLayers);
       on(dojo.byId("heatmap"), "change", toggleHeatmap);
       on(dojo.byId("refreshMode"), "change", toggleMode);
       on(dojo.byId("autoOffSet"), "change", toggleRefresh);
@@ -143,6 +154,26 @@
       on(dijit.byId("statType"), "change", updateLayerFromUIChange);
 
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
+
+
+      function setFeatureLayers() {
+
+        // remove existing feature layers
+        var aggregationsLayer = map.getLayer("aggregations");
+        if (aggregationsLayer)
+          map.removeLayer(aggregationsLayer);
+
+        var heatmapLayer = map.getLayer("heatmap");
+        if (heatmapLayer)
+          map.removeLayer(heatmapLayer);
+
+        queryLayerTimeExtent();
+        addHeatmapLayer();
+        setTimeout(function () {
+          addAggregationsLayer();
+          updateLayerFromUIChange(true);
+        }, 1000);
+      }
 
       function togglePanel() {
         domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
@@ -209,7 +240,7 @@
       }
 
       function toggleStats(evt) {
-        if (evt.srcElement.id == "useStats") {
+        if (evt.target.id == "useStats") {
           if (dojo.byId("useStats").checked == true) {
             dojo.byId("statField").style.display = "block";
             dojo.byId("statType").style.display = "block";
@@ -340,7 +371,6 @@
           return (field.type != "esriFieldTypeGeometry" && field.type != "esriFieldTypeBlob" && field.type != "esriFieldTypeRaster")
       }
 
-
       //#############################################################################################
       // Layer related functions
       //#############################################################################################
@@ -348,57 +378,58 @@
 
       // ### Add Aggregation Layer ###
 
-      function addAggregationLayer() {
+      function addAggregationsLayer() {
         var layerDefinition = {
           "geometryType": "esriGeometryPolygon",
-          "fields": [{
-            "name": "objectid",
-            "type": "esriFieldTypeInteger",
-            "alias": "objectid"
-                }, {
-            "name": "Geohash",
-            "type": "esriFieldTypeString",
-            "alias": "Geohash"
-                }, {
-            "name": "Count",
-            "type": "esriFieldTypeInteger",
-            "alias": "Count"
-                }, {
-            "name": "Weight",
-            "type": "esriFieldTypeDouble",
-            "alias": "Weight"
-                }, {
-            "name": "Geometry",
-            "type": "esriFieldTypeGeometry",
-            "alias": "Geometry"
-                }]
+          "fields": [
+            {
+              "name": "objectid",
+              "type": "esriFieldTypeInteger",
+              "alias": "objectid"
+            }, {
+              "name": "Geohash",
+              "type": "esriFieldTypeString",
+              "alias": "Geohash"
+            }, {
+              "name": "Count",
+              "type": "esriFieldTypeInteger",
+              "alias": "Count"
+            }, {
+              "name": "Weight",
+              "type": "esriFieldTypeDouble",
+              "alias": "Weight"
+            }, {
+              "name": "Geometry",
+              "type": "esriFieldTypeGeometry",
+              "alias": "Geometry"
+            }
+          ]
         };
         var featureCollection = {
           layerDefinition: layerDefinition,
           featureSet: null
         };
         var infoTemplate = new InfoTemplate("Attributes", "${*}");
-        var FSAggregationLayer = new FeatureLayer(featureCollection, {
-          id: "FSAggregations",
+        var aggregationsLayer = new FeatureLayer(featureCollection, {
+          id: "aggregations",
           objectIdField: "objectid",
           showLabels: true,
           infoTemplate: infoTemplate,
           outFields: ["*"]
         });
 
-        FSAggregationLayer.setRenderer(createRenderer("Aggregation"));
+        aggregationsLayer.setRenderer(createRenderer("Aggregation"));
         var label = createRenderer("Label");
-        FSAggregationLayer.setLabelingInfo([label]);
-        map.addLayer(FSAggregationLayer);
-        //console.log("Client FS Aggregation Layer added");
-        updateLayerFromUIChange();
+        aggregationsLayer.setLabelingInfo([label]);
+        map.addLayer(aggregationsLayer);
+        //console.log("Client Aggregations Layer added");
 
         updateLayerFields(false);
       };
 
       // ### Heat Map Feature Layer ###
 
-      function createHeatmapLayer() {
+      function addHeatmapLayer() {
         var layerDefinition = {
           "geometryType": "esriGeometryPoint",
           "fields": [{
@@ -435,6 +466,7 @@
           visible: true,
           opacity: 1
         });
+
         heatmapLayer.setRenderer(createRenderer("Heatmap"));
         map.addLayer(heatmapLayer);
         //console.log("Heatmap Layer added");
@@ -442,7 +474,7 @@
 
       // ### FeatureLayer Time Info query###
 
-      function getLayerTimeInfo() {
+      function queryLayerTimeExtent() {
         var url = dojo.byId("inputUrl").value + "?f=json";
         var request = esriRequest({
           "url": url,
@@ -451,7 +483,7 @@
         });
         request.then(
           function (response) {
-            timePara = new TimeExtent(new Date(response.timeInfo.timeExtent[0]), new Date(response.timeInfo.timeExtent[1]));
+            layerTimeExtent = new TimeExtent(new Date(response.timeInfo.timeExtent[0]), new Date(response.timeInfo.timeExtent[1]));
           },
           function (error) {
             console.log("Error getting the layers time extent: ", error.message);
@@ -463,7 +495,6 @@
       //#############################################################################################
       //
       function createRenderer(type) {
-
         // ### Aggregation Renderer ###
         if (type == "Aggregation") {
           // define default symbol
@@ -482,7 +513,7 @@
 
           // define breaks and color
           var renderer = new ClassBreaksRenderer({
-            field: "Count",
+            field: "Weight",
             defaultSymbol: symbol,
             normalizationType: "percent-of-total",
             normalizationTotal: 100,
@@ -491,41 +522,43 @@
                 minValue: 0,
                 maxValue: 10,
                 symbol: createSymbol(new Color([254, 240, 217, 0.7]))
-                                                },
+              },
               {
                 minValue: 10,
                 maxValue: 20,
                 symbol: createSymbol(new Color([253, 212, 158, 0.7]))
-                                                    },
+              },
               {
                 minValue: 20,
                 maxValue: 30,
                 symbol: createSymbol(new Color([253, 187, 132, 0.8]))
-                                                        },
+              },
               {
                 minValue: 30,
                 maxValue: 40,
                 symbol: createSymbol(new Color([252, 141, 89, 0.8]))
-                                                            },
+              },
               {
                 minValue: 40,
                 maxValue: 60,
                 symbol: createSymbol(new Color([239, 101, 72, 0.9]))
-                                                            },
+              },
               {
                 minValue: 60,
                 maxValue: 80,
                 symbol: createSymbol(new Color([215, 48, 31, 0.9]))
-                                                            },
+              },
               {
                 minValue: 80,
                 maxValue: 100,
                 symbol: createSymbol(new Color([153, 0, 0, 1]))
-                        }]
+              }
+            ]
           });
 
-        } else if (type == "Heatmap") {
+
           // ### HeatMap Renderer ###
+        } else if (type == "Heatmap") {
           var renderer = new HeatmapRenderer({
             colorStops: [
               {
@@ -569,7 +602,7 @@
                 color: "rgb(255, 0, 0)"
                     }],
             blurRadius: 12,
-            field: "Count"
+            field: "Weight"
           });
 
           // ### Add Labels ###
@@ -578,7 +611,7 @@
           // create a text symbol and renderer to define the style of labels
           var labelJson = {
             "labelExpressionInfo": {
-              "value": "{Count}"
+              "value": "{Weight}"
             },
             "labelPlacement": "always-horizontal"
           };
@@ -596,14 +629,13 @@
       // BDS FS Aggregation Query
       //#############################################################################################
       function buildQueryUrlFromUI() {
-        // get parameters from UI
         var start = 0;
         var end = new Date().getTime();
         if (replay) {
-          start = timePara.startTime.getTime();
-          end = timePara.endTime.getTime();
+          start = layerTimeExtent.startTime.getTime();
+          end = layerTimeExtent.endTime.getTime();
         }
-        
+
         var ext = encodeURIComponent(JSON.stringify(map.extent.toJson()));
         var lod = dojo.byId("lod").value;
         var style = dojo.byId("aggStyle").value;
@@ -632,7 +664,9 @@
         return url;
       }
 
-      function updateLayerFromUIChange() {
+      function updateLayerFromUIChange(setMapExtent) {
+        var sr = new SpatialReference(102100);
+
         var url = buildQueryUrlFromUI();
         var request = esriRequest({
           "url": url,
@@ -642,18 +676,23 @@
         request.then(
           function (response) {
             //console.log(response);
+
+            var aggregationsLayer = map.getLayer("aggregations");
+            var heatmapLayer = map.getLayer("heatmap");
+            if (!aggregationsLayer || !heatmapLayer)
+              return;
+
             var weightsArray = [];
 
             // create features (graphics) from the response features
-            var features = array.map(response.features, function (feature, i) {
-                var newFeature = {};
-                var geometry;
-                var attributes = {};
-
-                geometry = new Polygon(feature.geometry)
-                if (!geometry.hasOwnProperty('spatialReference') || !geometry['spatialReference']) {
-                  geometry['spatialReference'] = sr;
+            var graphics = array.map(response.features, function (feature, i) {
+                // make sure the geometry has the correct spatial reference
+                if (feature && feature.geometry && (!feature.geometry.hasOwnProperty('spatialReference') || !feature.geometry['spatialReference'])) {
+                  feature.geometry['spatialReference'] = sr;
                 }
+
+                // create the polygon
+                var geometry = new Polygon(feature.geometry);
 
                 if (dojo.byId("heatmap").checked == true) {
                   geometry = geometry.getCentroid();
@@ -669,30 +708,39 @@
                 feature.attributes["Weight"] = number.round(weight, 2);
                 weightsArray.push(weight);
 
-                newFeature = new Graphic(geometry, null, feature.attributes, null);
-                return newFeature;
-              })
+                var graphic = new Graphic(geometry, null, feature.attributes, null);
+                return graphic;
+            });
 
-            // calculate min and max count values to adjust renderer
-            maxValue = Math.max.apply(null, weightsArray);
-            minValue = Math.min.apply(null, weightsArray);
-
-            // add features to respective layer and adjust renderer
+            // add features to the respective selected layer and adjust renderer
+            var selectedLayer = null;
+            var otherLayer = null;
             if (dojo.byId("heatmap").checked == true) {
-              var layer = map.getLayer("heatmap");
-              layer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
+              selectedLayer = heatmapLayer;
+              otherLayer = aggregationsLayer;
+              heatmapLayer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
             } else {
-              var layer = map.getLayer("FSAggregations");
-              layer.renderer.normalizationTotal = maxValue;
+              selectedLayer = aggregationsLayer;
+              otherLayer = heatmapLayer;
+
+              // calculate min and max weight values to adjust heatmap renderer
+              minValue = Math.min.apply(null, weightsArray);
+              maxValue = Math.max.apply(null, weightsArray);
+              aggregationsLayer.renderer.normalizationTotal = maxValue;
             }
 
-            // update features in the client side layer
-            map.getLayer("FSAggregations").clear();
-            map.getLayer("heatmap").clear();
-            map.getLayer("heatmap").refresh();
-            layer.applyEdits(features, null, null)
+            // update features layer with nre features (graphics)
+            otherLayer.setVisibility(false);
+            selectedLayer.clear();
+            selectedLayer.setVisibility(true);
+            selectedLayer.applyEdits(graphics, null, null)
               .then(function () {
-                layer.refresh();
+                if (setMapExtent && graphics.length > 0) {
+                  var layerExtent = graphicsUtils.graphicsExtent(graphics);
+                  if (layerExtent)
+                    map.setExtent(layerExtent.expand(1.0));
+                }
+                selectedLayer.refresh();
               });
           },
           function (error) {
@@ -702,12 +750,12 @@
 
 
       //#############################################################################################
-      // Other Functions
+      //Other Functions
       //#############################################################################################
       //
 
       //
-      // time slider (init & update incl. labels)
+      // Time Slider (init & update incl. labels)
       //
       function initTimeSlider() {
         timeSlider = new TimeSlider({
@@ -715,26 +763,25 @@
         }, dom.byId("timeSlider"));
         map.setTimeSlider(timeSlider);
         timeSlider.setThumbCount(2);
-        timeSlider.createTimeStopsByCount(timePara, 21);
+        timeSlider.createTimeStopsByCount(layerTimeExtent, 21);
         timeSlider.setThumbIndexes([0, 21]);
         timeSlider.setThumbMovingRate(2000);
         timeSlider.startup();
         timeSlider.on("time-extent-change", function () {
           if (!ignoreChangeEvent) {
-            timePara = timeSlider.getCurrentTimeExtent();
+            layerTimeExtent = timeSlider.getCurrentTimeExtent();
             updateLayerFromUIChange();
           };
         });
-
         // add labels for every other time stop
         var labels = createLabels();
         timeSlider.setLabels(labels);
       }
 
       function updateTimeSlider() {
-        getLayerTimeInfo();
+        queryLayerTimeExtent();
         setTimeout(function () {
-          timeSlider.createTimeStopsByCount(timePara, 21);
+          timeSlider.createTimeStopsByCount(layerTimeExtent, 21);
           timeSlider.setThumbIndexes([0, 21]);
           timeSlider.startup();
           map.setTimeSlider(timeSlider);
@@ -784,14 +831,21 @@
             autoUpdate();
           };
         }, 2000);
-      };
+      }
 
     });
   </script>
 </head>
 
-<body>
-  <div id="map"></div>
+<body class="flat">
+  <div id="map">
+    <div class="basemapGallery-container" style="opacity:0.70" data-dojo-type="dijit/TitlePane"
+         data-dojo-props="title:'Basemap', closable:false, open:false">
+      <div data-dojo-type="dijit/layout/ContentPane" style="width:380px; height:280px; overflow:auto;">
+        <div id="basemapGallery"></div>
+      </div>
+    </div>
+  </div>
   <div class="collapser">
     <i id="collapserIcon" class="flat-chevron-down"></i>
     <i id="expanderIcon" class="flat-chevron-up"></i>
@@ -800,7 +854,7 @@
     <div style="margin-left: 10px;">
       <b>Service URL:</b>
       <input type="text" id="inputUrl" value="http://storm.esri.com:6080/arcgis/rest/services/faa-4326-hex-flat/MapServer/0" style="width: 700px; margin-bottom: 5px" />
-      <input type="button" class="button" id="addFSLayer" value="Add Layer" />
+      <input type="button" class="button" id="setLayerButton" value="Set Layer" />
       <div class="tableContainer">
       <table id="settingsTable" class="settingsTable" width="1000px">
         <tr>
