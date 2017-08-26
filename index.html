@@ -671,7 +671,6 @@
           end = _layerTimeExtent.endTime.getTime();
         }
 
-        var ext = encodeURIComponent(JSON.stringify(_map.extent.toJson()));
         var lod = dojo.byId("lod").value;
         var style = dojo.byId("aggStyle").value;
         if (dojo.byId("autoOffSet").checked == true) {
@@ -683,7 +682,15 @@
         }
 
         var url = dojo.byId("inputUrl").value;
-        url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true&geometryType=esriGeometryEnvelope&geometry=" + ext + "&time=" + start + "," + end + "&f=pjson";
+        url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true&time=" + start + "," + end;
+
+        // TODO - for now, add the spatial filter to the query, only for point geometry layers
+        if (_layerInfo && _layerInfo.geometryType && _layerInfo.geometryType === "esriGeometryPoint") {
+          var ext = encodeURIComponent(JSON.stringify(_map.extent.toJson()));
+          url += "&geometryType=esriGeometryEnvelope&geometry=" + ext;
+        }
+
+        url += "&f=pjson";
 
         if (dojo.byId("useStats").checked == true) {
           var outStatisticsObj = [ {
