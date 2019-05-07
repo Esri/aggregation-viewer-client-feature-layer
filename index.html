@@ -31,11 +31,11 @@
 
   <title>Aggregation Viewer - Client Side Feature Layer</title>
 
-  <link rel="stylesheet" href="https://js.arcgis.com/3.19/esri/css/esri.css">
+  <link rel="stylesheet" href="https://js.arcgis.com/3.28/esri/css/esri.css">
   <link rel="stylesheet" href="./featureServiceViewerStyles.css">
 
   <script src="https://use.fontawesome.com/9482a0b1d1.js"></script>
-  <script src="https://js.arcgis.com/3.19/"></script>
+  <script src="https://js.arcgis.com/3.28/"></script>
   <script>
     require([
       "dojo/parser",
@@ -56,6 +56,8 @@
       "esri/InfoTemplate",
       "esri/TimeExtent",
       "esri/graphicsUtils",
+
+      "esri/IdentityManager",
 
       "esri/layers/FeatureLayer",
       "esri/layers/LabelClass",
@@ -78,10 +80,12 @@
       "dijit/form/DropDownButton",
       "dijit/form/Select",
 
+      "dojo/query!css2",
       "dojo/domReady!"
     ], function (
       parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
       Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent, graphicsUtils,
+      IdentityManager,
       FeatureLayer, LabelClass,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
       TimeSlider, BasemapGallery,
@@ -243,10 +247,10 @@
           } else {
             _ignoreChangeEvent = true;
             updateTimeSlider();
-          };
+          }
           domStyle.set(dom.byId('timeSlider'), "display", 'block');
-        };
-      };
+        }
+      }
 
       function toggleHeatmap(evt) {
         if (dojo.byId("heatmap").checked == true) {
@@ -664,11 +668,14 @@
       // BDS FS Aggregation Query
       //#############################################################################################
       function buildQueryUrlFromUI() {
-        var start = 0;
-        var end = new Date().getTime();
+        var timeParam = "";
         if (_replay) {
-          start = _layerTimeExtent.startTime.getTime();
-          end = _layerTimeExtent.endTime.getTime();
+          var start = _layerTimeExtent.startTime.getTime();
+          var end = _layerTimeExtent.endTime.getTime();
+          timeParam = "&time=" + start + "," + end;
+        } else if (_live) {
+          var now = new Date().getTime();
+          timeParam = "&time=null," + now;
         }
 
         var lod = dojo.byId("lod").value;
@@ -682,7 +689,7 @@
         }
 
         var url = dojo.byId("inputUrl").value;
-        url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true&time=" + start + "," + end;
+        url += "/query?lod=" + lod + "&lodType=" + style + "&outSR=102100&returnGeometry=true" + timeParam;
 
         // TODO - for now, add the spatial filter to the query, only for point geometry layers
         if (_layerInfo && _layerInfo.geometryType && _layerInfo.geometryType === "esriGeometryPoint") {
@@ -912,7 +919,7 @@
         </div> -->
       </div>
       <div class="config-content">
-        <input type="text" id="inputUrl" value="http://storm.esri.com:6080/arcgis/rest/services/faa/MapServer/0" />
+        <input type="text" id="inputUrl" value="https://storm.esri.com:6443/arcgis/rest/services/faa/MapServer/0" />
         <input type="button" class="button" id="setLayerButton" value="Set Layer" />
       </div>
     </section>
