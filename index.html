@@ -162,7 +162,10 @@
           sliderStyle: "small"
         });
 
-        _map.on("load", setFeatureLayers);
+        _map.on("load", function () {
+          console.log("Map loaded successfully.");
+          setFeatureLayers();
+        });
 
         // Attach extent change handler
         attachMapExtentChangeHandler();
@@ -259,21 +262,27 @@
 
       function setFeatureLayers() {
 
-        // remove existing feature layers
+        // Remove existing feature layers
         var aggregationsLayer = _map.getLayer("aggregations");
-        if (aggregationsLayer)
+        if (aggregationsLayer) {
           _map.removeLayer(aggregationsLayer);
+        } else {
+          console.log("Aggregations layer not found.");
+        }
 
         var heatmapLayer = _map.getLayer("heatmap");
-        if (heatmapLayer)
+        if (heatmapLayer) {
           _map.removeLayer(heatmapLayer);
+        } else {
+          console.log("Heatmap layer not found.");
+        }
 
-        queryLayerTimeExtent();
-        addHeatmapLayer();
-        setTimeout(function () {
-          addAggregationsLayer();
+        var aggregationsLayer = addAggregationsLayer();
+        aggregationsLayer.on("load", function () {
+          queryLayerTimeExtent();
+          addHeatmapLayer();
           updateLayerFromUIChange(true);
-        }, 1000);
+        });
       }
 
       function togglePanel() {
@@ -595,9 +604,10 @@
         }
         
         _map.addLayer(aggregationsLayer);
-        //console.log("Client Aggregations Layer added");
+        console.log("Client Aggregations Layer added");
 
         getLayerInfo();
+        return aggregationsLayer
       };
 
       // ### Heat Map Feature Layer ###
