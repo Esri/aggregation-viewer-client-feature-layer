@@ -854,27 +854,28 @@
         }
 
         var lod = dojo.byId("lod").value;
-        var subStyle = dojo.byId("aggSubStyle").value;
-        var style = dojo.byId("aggStyle").value;
+        var lodSubType = dojo.byId("aggSubStyle").value;
+        var lodType = dojo.byId("aggStyle").value;
         if (dojo.byId("autoOffSet").checked === true) {
-          if (style === "flatHexagon" || style === "pointyHexagon" || style === "square" || style === 'geotile') {
+          if (lodType === "flatHexagon" || lodType === "pointyHexagon" || lodType === "square" || lodType === 'geotile') {
             lod = (parseInt(lod) + 5).toString();
-          } else if (style === "flatTriangle" || style === "pointyTriangle") {
+          } else if (lodType === "flatTriangle" || lodType === "pointyTriangle") {
             lod = (parseInt(lod) + 4).toString();
-          } else if (style === 'h3') {
-            lod = (parseInt(lod) + 4).toString();
+          } else if (lodType === 'h3') {
+            lod = (parseInt(lod) + 2).toString();
           }
         }
 
+        // Build the query URL
         var url = dojo.byId("inputUrl").value;
-        
-        // Determine output spatial reference - use LOD SR if enabled, otherwise use current map SR
-        var outputSR = _currentMapSR;
+        var outSR = _currentMapSR;
+        url += "/query?lod=" + lod + "&lodType=" + lodType + "&lodSubType=" + lodSubType + "&outSR=" + outSR;
         if (dojo.byId("useLodSR") && dojo.byId("useLodSR").checked === true) {
-          outputSR = dijit.byId("lodSpatialReference").value;
+          var lodSR = dijit.byId("lodSpatialReference").value;
+          url += "&lodSR=" + lodSR;
         }
-        
-        url += "/query?lod=" + lod + "&lodType=" + style + "&lodSubType=" + subStyle + "&outSR=" + outputSR + "&returnGeometry=true" + timeParam;
+        url +=  "&returnGeometry=true" + timeParam;
+
 
         // TODO - for now, add the spatial filter to the query, only for point geometry layers
         if (_layerInfo && _layerInfo.geometryType && _layerInfo.geometryType === "esriGeometryPoint") {
@@ -1161,16 +1162,6 @@
         <div class="header-actions-group">
           <a href="#" id="layersToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
-        <!-- <div class="header-actions-group">
-          <div data-dojo-type="dijit/form/DropDownButton">
-            <span><i class="fa fa-plus"></i></span>
-            <div data-dojo-type="dijit/TooltipDialog" style="display: none;">
-              <label for="name2">Name:</label> <input data-dojo-type="dijit/form/TextBox" id="name2" name="name2" /><br />
-              <label for="hobby2">Hobby:</label> <input data-dojo-type="dijit/form/TextBox" id="hobby2" name="hobby2" /><br />
-              <button data-dojo-type="dijit/form/Button" type="submit">Save</button>
-            </div>
-          </div>
-        </div> -->
       </div>
       <div class="config-content">
         <input type="text" id="inputUrl" value="https://storm.esri.com:6443/arcgis/rest/services/faa/MapServer/0" />
@@ -1178,16 +1169,36 @@
       </div>
     </section>
 
-    <!-- Spatial Reference Section -->
-    <section id="spatialReferenceSection">
-      <div class="config-header">
-        <h2>Spatial Reference</h2>
-        <div class="header-actions-group">
-          <a href="#" id="spatialReferenceToggle"><i class="fa fa-chevron-up"></i></a>
-        </div>
-      </div>
+    <!-- Basemap -->
+    <div>
+      <label for="basemapUrl">Basemap</label>
+      <select id="basemapUrl" name="basemapUrl" style="width: 120px;">
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer">Topographic</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer">Streets</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer">National Geographic</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer">Light Gray Canvas</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer">Dark Gray Canvas</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer">Imagery</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Terrain_Base/MapServer">Terrain</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Shaded_Relief/MapServer">Shaded Relief</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Transportation/MapServer">Transportation</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Reference_Overlay/MapServer">World Reference</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Ocean/World_Ocean_Base/MapServer">Oceans</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer">USA Topo Maps</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Specialty/World_Navigation_Charts/MapServer">Navigation Charts</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer">Boundaries and Places</option>
+        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places_Alternate/MapServer">Boundaries and Places Alternate</option>
+        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer">USGS National Map</option>
+        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer">USGS Imagery</option>
+        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer">USGS Imagery with Labels</option>
+        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer">USGS Hydro</option>
+      </select>
+
+
+      <!-- Map SR -->
       <div class="config-content">
         <div class="input-group">
+          <label for="spatialReferenceSelect">Spatial Reference</label>
           <select name="spatialReferenceSelect" data-dojo-type="dijit/form/Select" id="spatialReferenceSelect" style="width: 200px;">
             <option value="102003">102003 (Albers)</option>
             <option value="102100" selected="selected">102100 (Web Mercator)</option>
@@ -1204,15 +1215,14 @@
             <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
             <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
           </select>
-          <label for="spatialReferenceSelect">Coordinate System</label>
         </div>
         <div class="input-group">
-          <input type="text" id="currentMapSR" value="102100" readonly style="width: 80px;" />
           <label for="currentMapSR">Current Map SR</label>
+          <input type="text" id="currentMapSR" value="102100" readonly style="width: 80px;" />
         </div>
-      </div>
-    </section>
+    </div>
 
+    <!-- Aggregation Settings -->
     <section id="aggSettingsSection">
       <div class="config-header">
         <h2>Aggregation Settings</h2>
@@ -1232,7 +1242,7 @@
             <option value="flatTriangle">Flat Triangle</option>
             <option value="pointyTriangle">Pointy Triangle</option>
           </select>
-          <label for="aggStyle">GeoHash Style</label>
+          <label for="aggStyle">LOD Type</label>
         </div>
         <div class="input-group">
           <input type="number" id="lod" value="3" style="width: 50px;" />
@@ -1247,7 +1257,7 @@
             <option value="shape">Shape</option>
             <option value="centroid" selected="selected">Centroid</option>
           </select>
-          <label for="aggSubStyle">Geohash SubStyle</label>
+          <label for="aggSubStyle">LOD SubType</label>
         </div>
         <div class="input-group">
           <input type="checkbox" id="heatmap" />
@@ -1268,17 +1278,13 @@
           </select>
         </div>
       </div>
-    </section>
 
-    <!-- LOD Spatial Reference Section -->
-    <section id="lodSRSection">
-      <div class="config-header">
-        <h2>LOD Spatial Reference</h2>
-        <div class="header-actions-group">
-          <a href="#" id="lodSRToggle"><i class="fa fa-chevron-up"></i></a>
-        </div>
-      </div>
+      <!-- LOD SR -->
       <div class="config-content">
+        <div class="input-group">
+          <input type="checkbox" id="useLodSR" />
+          <label for="useLodSR">Use LOD SR</label>
+        </div>
         <div class="input-group">
           <select name="lodSpatialReference" data-dojo-type="dijit/form/Select" id="lodSpatialReference" style="width: 200px;">
             <option value="102003">102003 (Albers)</option>
@@ -1296,13 +1302,9 @@
             <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
             <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
           </select>
-          <label for="lodSpatialReference">LOD Coordinate System</label>
+          <label for="lodSpatialReference">LOD SR</label>
         </div>
-        <div class="input-group">
-          <input type="checkbox" id="useLodSR" />
-          <label for="useLodSR">Use Different SR for LOD</label>
-        </div>
-      </div>
+
     </section>
 
     <!-- Aggregation Labels Section -->
@@ -1364,15 +1366,6 @@
       </div>
     </section>
 
-    <!-- Add basemap dropdown UI control -->
-    <div>
-      <label for="basemapUrl">Select Basemap:</label>
-      <select id="basemapUrl">
-        <option value="https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer">World Street Map</option>
-        <option value="https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer">World Topographic Map</option>
-        <option value="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer">World Imagery</option>
-      </select>
-    </div>
   </div>
 </body>
 </html>
