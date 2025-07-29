@@ -589,7 +589,10 @@
         };
         var featureCollection = {
           layerDefinition: layerDefinition,
-          featureSet: null
+          featureSet: {
+            features: [],
+            geometryType: layerDefinition.geometryType
+          }
         };
         var infoTemplate = new InfoTemplate("Attributes", "${*}");
         var aggregationsLayer = new FeatureLayer(featureCollection, {
@@ -645,7 +648,10 @@
 
         var featureCollection = {
           layerDefinition: layerDefinition,
-          featureSet: null
+          featureSet: {
+            features: [],
+            geometryType: layerDefinition.geometryType
+          }
         };
 
         var heatmapLayer = new FeatureLayer(featureCollection, {
@@ -657,7 +663,7 @@
 
         heatmapLayer.setRenderer(createRenderer("Heatmap"));
         _map.addLayer(heatmapLayer);
-        //console.log("Heatmap Layer added");
+        console.log("Heatmap Layer added");
       };
 
       // ### FeatureLayer Time Info query###
@@ -921,7 +927,8 @@
         });
         request.then(
           function (response) {
-            //console.log(response);
+            // Defensive: ensure features is always an array
+            response.features = Array.isArray(response.features) ? response.features : [];
 
             var aggregationsLayer = _map.getLayer("aggregations");
             var heatmapLayer = _map.getLayer("heatmap");
@@ -962,6 +969,8 @@
       }
 
       function processProjectedFeatures(features, projectedGeometries, weightsArray, setMapExtent) {
+        features = Array.isArray(features) ? features : [];
+
         var graphics = array.map(features, function (feature, i) {
           var geometry = projectedGeometries[i];
 
@@ -987,6 +996,7 @@
       }
 
       function processFeatures(features, weightsArray, setMapExtent) {
+        features = Array.isArray(features) ? features : [];
         var mapSR = new SpatialReference(_map.spatialReference.wkid);
         
         // create features (graphics) from the response features
