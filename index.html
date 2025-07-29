@@ -64,6 +64,7 @@
 
       "esri/layers/FeatureLayer",
       "esri/layers/LabelClass",
+      "esri/layers/ArcGISDynamicMapServiceLayer",
 
       "esri/symbols/SimpleLineSymbol",
       "esri/symbols/SimpleFillSymbol",
@@ -71,7 +72,6 @@
       "esri/geometry/Polygon",
 
       "esri/dijit/TimeSlider",
-      "esri/dijit/BasemapGallery",
 
       "esri/renderers/HeatmapRenderer",
       "esri/renderers/ClassBreaksRenderer",
@@ -89,9 +89,9 @@
       parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
       Map, Graphic, SpatialReference, Color, esriRequest, webMercatorUtils, Extent, GeometryService, InfoTemplate, TimeExtent, graphicsUtils,
       IdentityManager,
-      FeatureLayer, LabelClass,
+      FeatureLayer, LabelClass, ArcGISDynamicMapServiceLayer,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
-      TimeSlider, BasemapGallery,
+      TimeSlider,
       HeatmapRenderer, ClassBreaksRenderer,
       BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton, Select) {
 
@@ -135,16 +135,8 @@
         "spatialReference": {"wkid": _defaultWkid}
       });
 
-      // Build initial map
-      // Ensure the basemapGallery container is ready before calling buildMap
-      if (dom.byId("basemapGallery")) {
-        buildMap(initMapExtent);
-      } else {
-        console.error("BasemapGallery container not found. Map initialization aborted.");
-      }
-
-      // ### Global basemap gallery reference for proper cleanup ###
-      var _basemapGallery = null;
+      // Build initial map with the default extent
+      buildMap(initMapExtent);
 
       /**
        * Builds or rebuilds the map with the specified extent and current spatial reference
@@ -152,10 +144,6 @@
        * @param {Extent} mapExtent - The extent to set for the new map
        */
       function buildMap(mapExtent) {
-
-        esri.config.defaults.io.corsEnabledServers.push('http://storm.esri.com:6080');
-        esri.config.defaults.io.corsEnabledServers.push('https://storm.esri.com:6443');
-        esri.config.defaults.io.corsEnabledServers.push('sampleserver6.arcgisonline.com');
 
         if (_map) {
           // Destroy existing map if it exists
@@ -165,54 +153,28 @@
           console.log("Destroyed previous map instance for spatial reference change");
         }
 
-        // Destroy existing basemap gallery if it exists
-        if (_basemapGallery) {
-          try {
-            _basemapGallery.destroy();
-          } catch (e) {
-            console.log("Error destroying basemap gallery:", e);
-          }
-          _basemapGallery = null;
-        }
-
-        // Clear the basemap gallery container to prevent ID conflicts
-        var basemapContainer = dom.byId("basemapGallery");
-        if (basemapContainer) {
-          basemapContainer.innerHTML = "";
-        }
-
         // Create new map with the specified extent
         _map = new Map("map", {
+          wrapAround180: true,
           extent: mapExtent,
           showLabels: true,
-          showAttribution: false
+          showAttribution: false,
+          sliderStyle: "small"
         });
 
-        // Declare galleryId before usage
-        var galleryId = "basemapGallery_" + Date.now();
-
-        // Log the initialization of the BasemapGallery
-        console.log("Initializing BasemapGallery with ID:", galleryId);
-
-        // Wrap layer addition in a try-catch block to handle errors gracefully
-        try {
-          // Recreate basemap gallery for new map with unique ID
-          _basemapGallery = new BasemapGallery({
-            showArcGISBasemaps: true,
-            map: _map,
-            id: galleryId
-          }, "basemapGallery");
-          _basemapGallery.startup();
-          console.log("BasemapGallery initialized successfully.");
-        } catch (e) {
-          console.error("Error initializing BasemapGallery:", e);
-        }
-
-        // Set up map load event
         _map.on("load", setFeatureLayers);
 
         // Attach extent change handler
         attachMapExtentChangeHandler();
+
+        // Add the basemap
+        var basemapUrl = dom.byId("basemapUrl").value;
+        var basemapLayer;
+        basemapLayer = new ArcGISDynamicMapServiceLayer(basemapUrl, {
+          "showAttribution": false,
+          "opacity": 1.0
+        });
+        _map.addLayers([basemapLayer]);
 
         // Update current map SR display
         dom.byId("currentMapSR").value = _wkid;
@@ -1176,14 +1138,7 @@
 </head>
 
 <body class="flat">
-  <div id="map">
-    <div class="basemapGallery-container" style="opacity:0.70" data-dojo-type="dijit/TitlePane"
-         data-dojo-props="title:'Basemap', closable:false, open:false">
-      <div data-dojo-type="dijit/layout/ContentPane" style="width:380px; height:280px; overflow:auto;">
-        <div id="basemapGallery"></div>
-      </div>
-    </div>
-  </div>
+  <div id="map"></div>
   <div id="timeSlider"></div>
   <div class="collapser">
     <i id="collapserIcon" class="flat-chevron-right"></i>
@@ -1398,6 +1353,16 @@
         </div>
       </div>
     </section>
+
+    <!-- Add basemap dropdown UI control -->
+    <div>
+      <label for="basemapUrl">Select Basemap:</label>
+      <select id="basemapUrl">
+        <option value="https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer">World Street Map</option>
+        <option value="https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer">World Topographic Map</option>
+        <option value="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer">World Imagery</option>
+      </select>
+    </div>
   </div>
 </body>
 </html>
