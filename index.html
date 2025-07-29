@@ -65,6 +65,7 @@
       "esri/layers/FeatureLayer",
       "esri/layers/LabelClass",
       "esri/layers/ArcGISDynamicMapServiceLayer",
+      "esri/layers/ArcGISTiledMapServiceLayer",
 
       "esri/symbols/SimpleLineSymbol",
       "esri/symbols/SimpleFillSymbol",
@@ -89,7 +90,7 @@
       parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
       Map, Graphic, SpatialReference, Color, esriRequest, webMercatorUtils, Extent, GeometryService, InfoTemplate, TimeExtent, graphicsUtils,
       IdentityManager,
-      FeatureLayer, LabelClass, ArcGISDynamicMapServiceLayer,
+      FeatureLayer, LabelClass, ArcGISDynamicMapServiceLayer, ArcGISTiledMapServiceLayer,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
       TimeSlider,
       HeatmapRenderer, ClassBreaksRenderer,
@@ -116,6 +117,9 @@
       
       // ### Geometry Service for spatial reference transformations ###
       var _gs = new GeometryService("https://utility.arcgisonline.com/arcgis/rest/services/Geometry/GeometryServer");
+
+      // Define _isBasemapTiled with a default value
+      var _isBasemapTiled = true; // Set to true if tiled basemaps are the default, otherwise false
 
       //#############################################################################################
       // Map Related functions
@@ -179,6 +183,9 @@
         });
         _map.addLayers([basemapLayer]);
 
+        // only the first map built is tiled
+        _isBasemapTiled = false;
+
         // Update current map SR display
         dom.byId("currentMapSR").value = _wkid;
       }
@@ -226,8 +233,6 @@
       on(dojo.byId("layersToggle"), "click", createSectionToggle("layersSection", "layersToggle", layersVisibility));
       on(dojo.byId("aggSettingsToggle"), "click", createSectionToggle("aggSettingsSection", "aggSettingsToggle", aggSettingsVisibility));
       on(dojo.byId("streamingModeToggle"), "click", createSectionToggle("streamingModeSection", "streamingModeToggle", streamingModeVisibility));
-      on(dojo.byId("spatialReferenceToggle"), "click", createSectionToggle("spatialReferenceSection", "spatialReferenceToggle", spatialReferenceVisibility));
-      on(dojo.byId("lodSRToggle"), "click", createSectionToggle("lodSRSection", "lodSRToggle", lodSRVisibility));
       on(dojo.byId("aggLabelsToggle"), "click", createSectionToggle("aggLabelsMainSection", "aggLabelsToggle", aggLabelsVisibility));
 
       on(dojo.byId("setLayerButton"), "click", setFeatureLayers);
@@ -1144,6 +1149,45 @@
         this.title = "";
       });
 
+      function onSelectedBasemapChanged() {
+        // Get the selected basemap URL from the dropdown
+        var basemapUrl = dom.byId("basemapUrl").value;
+        console.log("Selected basemap URL: ", basemapUrl);
+
+        // Check if the map object is initialized
+        if (!_map) {
+          console.error("Map object is not initialized.");
+          return;
+        }
+
+        // Remove the existing basemap layer if it exists
+        var basemapLayer = _map.getLayer("basemap");
+        if (basemapLayer) {
+          console.log("Removing existing basemap layer.");
+          _map.removeLayer(basemapLayer);
+        }
+
+        // Add the new basemap layer
+        var newBasemapLayer;
+        if (_isBasemapTiled) {
+          newBasemapLayer = new ArcGISTiledMapServiceLayer(basemapUrl, { id: "basemap" });
+        } else {
+          newBasemapLayer = new ArcGISDynamicMapServiceLayer(basemapUrl, { id: "basemap", opacity: 1.0 });
+        }
+        _map.addLayer(newBasemapLayer);
+
+        console.log("Basemap updated to: " + basemapUrl);
+      }
+
+      require(["dojo/domReady!"], function() {
+        var basemapDropdown = dom.byId("basemapUrl");
+        if (basemapDropdown) {
+          // Attach the event listener to the basemap dropdown
+          on(basemapDropdown, "change", onSelectedBasemapChanged);
+        } else {
+          console.warn("Element with ID 'basemapUrl' not found in the DOM.");
+        }
+      });
     });
   </script>
 </head>
