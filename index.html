@@ -31,11 +31,11 @@
 
   <title>Aggregation Viewer - Client Side Feature Layer</title>
 
-  <link rel="stylesheet" href="https://js.arcgis.com/3.28/esri/css/esri.css">
+  <link rel="stylesheet" href="https://js.arcgis.com/3.44/esri/css/esri.css">
   <link rel="stylesheet" href="./featureServiceViewerStyles.css">
 
   <script src="https://use.fontawesome.com/9482a0b1d1.js"></script>
-  <script src="https://js.arcgis.com/3.28/"></script>
+  <script src="https://js.arcgis.com/3.44/"></script>
   <script>
     require([
       "dojo/parser",
@@ -152,6 +152,11 @@
        * @param {Extent} mapExtent - The extent to set for the new map
        */
       function buildMap(mapExtent) {
+
+        esri.config.defaults.io.corsEnabledServers.push('http://storm.esri.com:6080');
+        esri.config.defaults.io.corsEnabledServers.push('https://storm.esri.com:6443');
+        esri.config.defaults.io.corsEnabledServers.push('sampleserver6.arcgisonline.com');
+
         if (_map) {
           // Destroy existing map if it exists
           _map.removeAllLayers();
@@ -177,7 +182,6 @@
         }
 
         // Create new map with the specified extent
-        // Note: Keep map in Web Mercator for basemap compatibility, project data as needed
         _map = new Map("map", {
           extent: mapExtent,
           showLabels: true,
@@ -187,17 +191,12 @@
         // Declare galleryId before usage
         var galleryId = "basemapGallery_" + Date.now();
 
-        // Ensure the basemapGallery container exists before initializing
-        if (!basemapContainer) {
-          console.error("BasemapGallery container not found. Initialization aborted.");
-          return;
-        }
-
         // Log the initialization of the BasemapGallery
         console.log("Initializing BasemapGallery with ID:", galleryId);
 
-        // Recreate basemap gallery for new map with unique ID
+        // Wrap layer addition in a try-catch block to handle errors gracefully
         try {
+          // Recreate basemap gallery for new map with unique ID
           _basemapGallery = new BasemapGallery({
             showArcGISBasemaps: true,
             map: _map,
@@ -575,7 +574,7 @@
           if (!field || !field.type)
             return false;
 
-          return (field.type !== "esriFieldTypeGeometry" && field.type !== "esriFieldTypeBlob" && field.type !== "esriFieldTypeRaster")
+          return (field.type !== "esriFieldTypeGeometry" && field.type !== "esriFieldTypeBlob" && field.type !== "esriFieldTypeRaster");
       }
 
       //#############################################################################################
