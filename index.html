@@ -53,6 +53,9 @@
       "esri/SpatialReference",
       "esri/Color",
       "esri/request",
+      "esri/geometry/webMercatorUtils",
+      "esri/geometry/Extent",
+      "esri/tasks/GeometryService",
       "esri/InfoTemplate",
       "esri/TimeExtent",
       "esri/graphicsUtils",
@@ -84,7 +87,7 @@
       "dojo/domReady!"
     ], function (
       parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
-      Map, Graphic, SpatialReference, Color, esriRequest, InfoTemplate, TimeExtent, graphicsUtils,
+      Map, Graphic, SpatialReference, Color, esriRequest, webMercatorUtils, Extent, GeometryService, InfoTemplate, TimeExtent, graphicsUtils,
       IdentityManager,
       FeatureLayer, LabelClass,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
@@ -104,6 +107,15 @@
       var _maxValue;
       var _ignoreChangeEvent = false;
       var _layerInfo;
+      
+      // ### Spatial Reference variables ###
+      // These variables manage coordinate system transformations and spatial reference handling
+      var _defaultWkid = 102100; // Web Mercator - default coordinate system
+      var _wkid = 102100;         // Current working coordinate system ID
+      var _currentMapSR = 102100; // Current map spatial reference system
+      
+      // ### Geometry Service for spatial reference transformations ###
+      var _gs = new GeometryService("https://utility.arcgisonline.com/arcgis/rest/services/Geometry/GeometryServer");
 
       //#############################################################################################
       // Map Related functions
@@ -114,73 +126,124 @@
       esri.config.defaults.io.corsEnabledServers.push('https://storm.esri.com:6443');
       esri.config.defaults.io.corsEnabledServers.push('http://localhost:9000');
 
-      _map = new Map("map", {
-        basemap: "gray",
-        center: [0, 0],
-        zoom: 1,
-        showLabels: true
+      // ### Initialize map with default extent ###
+      var initMapExtent = new Extent({
+        "xmin": -20037508.342787,
+        "ymin": -20037508.342787,
+        "xmax": 20037508.342787,
+        "ymax": 20037508.342787,
+        "spatialReference": {"wkid": _defaultWkid}
       });
 
-      var basemapGallery = new BasemapGallery({
-        showArcGISBasemaps: true,
-        map: _map
-      }, "basemapGallery");
-      basemapGallery.startup();
+      // Build initial map
+      buildMap(initMapExtent);
 
-      // ### On Map load continue ###
+      // ### Global basemap gallery reference for proper cleanup ###
+      var _basemapGallery = null;
 
-      _map.on("load", setFeatureLayers);
+      /**
+       * Builds or rebuilds the map with the specified extent and current spatial reference
+       * This function destroys any existing map and creates a new one with proper spatial reference
+       * @param {Extent} mapExtent - The extent to set for the new map
+       */
+      function buildMap(mapExtent) {
+        if (_map) {
+          // Destroy existing map if it exists
+          _map.removeAllLayers();
+          _map.destroy();
+          _map = null;
+          console.log("Destroyed previous map instance for spatial reference change");
+        }
+
+        // Destroy existing basemap gallery if it exists
+        if (_basemapGallery) {
+          try {
+            _basemapGallery.destroy();
+          } catch (e) {
+            console.log("Error destroying basemap gallery:", e);
+          }
+          _basemapGallery = null;
+        }
+
+        // Clear the basemap gallery container to prevent ID conflicts
+        var basemapContainer = dom.byId("basemapGallery");
+        if (basemapContainer) {
+          basemapContainer.innerHTML = "";
+        }
+
+        // Create new map with the specified extent
+        // Note: Keep map in Web Mercator for basemap compatibility, project data as needed
+        _map = new Map("map", {
+          extent: mapExtent,
+          showLabels: true,
+          showAttribution: false
+        });
+
+        // Recreate basemap gallery for new map with unique ID
+        var galleryId = "basemapGallery_" + Date.now();
+        _basemapGallery = new BasemapGallery({
+          showArcGISBasemaps: true,
+          map: _map,
+          id: galleryId
+        }, "basemapGallery");
+        _basemapGallery.startup();
+
+        // Set up map load event
+        _map.on("load", setFeatureLayers);
+
+        // Attach extent change handler
+        attachMapExtentChangeHandler();
+
+        // Update current map SR display
+        dom.byId("currentMapSR").value = _wkid;
+      }
 
       // ### Issue new query on extent-change if live mode is disabled ###
-
-      _map.on("extent-change", function (evt) {
-        if (_map.getLayer("aggregations") && !_ignoreChangeEvent && !_live) {
-          updateLayerFromUIChange();
-        };
-      });
+      // Note: This event handler will be re-attached when map is rebuilt
+      function attachMapExtentChangeHandler() {
+        _map.on("extent-change", function (evt) {
+          if (_map.getLayer("aggregations") && !_ignoreChangeEvent && !_live) {
+            updateLayerFromUIChange();
+          }
+        });
+      }
 
       //#############################################################################################
       // UI Related functions
       //#############################################################################################
 
       // ### UI event listener ###
+      
+      // ### DRY: Reusable section toggle function ###
+      function createSectionToggle(sectionId, toggleId, visibilityVar) {
+        return function () {
+          // toggle section visibility
+          if (visibilityVar.value) {
+            domClass.add(dojo.byId(sectionId), "section-hidden");
+            domClass.replace(domQuery("#" + toggleId + " i")[0], "fa-chevron-down", "fa-chevron-up");
+          } else {
+            domClass.remove(dojo.byId(sectionId), "section-hidden");
+            domClass.replace(domQuery("#" + toggleId + " i")[0], "fa-chevron-up", "fa-chevron-down");
+          }
+          visibilityVar.value = !visibilityVar.value;
+        };
+      }
 
-      var layersVisibility = true;
-      on(dojo.byId("layersToggle"), "click", function () {
-        // toggle section visibility
-        if (layersVisibility) {
-          domClass.add(dojo.byId("layersSection"), "section-hidden");
-          domClass.replace(domQuery("#layersToggle i")[0], "fa-chevron-down", "fa-chevron-up");
-        } else {
-          domClass.remove(dojo.byId("layersSection"), "section-hidden");
-          domClass.replace(domQuery("#layersToggle i")[0], "fa-chevron-up", "fa-chevron-down");
-        }
-        layersVisibility = !layersVisibility;
-      });
-      var aggSettingsVisibility = true;
-      on(dojo.byId("aggSettingsToggle"), "click", function () {
-        // toggle section visibility
-        if (aggSettingsVisibility) {
-          domClass.add(dojo.byId("aggSettingsSection"), "section-hidden");
-          domClass.replace(domQuery("#aggSettingsToggle i")[0], "fa-chevron-down", "fa-chevron-up");
-        } else {
-          domClass.remove(dojo.byId("aggSettingsSection"), "section-hidden");
-          domClass.replace(domQuery("#aggSettingsToggle i")[0], "fa-chevron-up", "fa-chevron-down");
-        }
-        aggSettingsVisibility = !aggSettingsVisibility;
-      });
-      var streamingModeVisibility = true;
-      on(dojo.byId("streamingModeToggle"), "click", function () {
-        // toggle section visibility
-        if (streamingModeVisibility) {
-          domClass.add(dojo.byId("streamingModeSection"), "section-hidden");
-          domClass.replace(domQuery("#streamingModeToggle i")[0], "fa-chevron-down", "fa-chevron-up");
-        } else {
-          domClass.remove(dojo.byId("streamingModeSection"), "section-hidden");
-          domClass.replace(domQuery("#streamingModeToggle i")[0], "fa-chevron-up", "fa-chevron-down");
-        }
-        streamingModeVisibility = !streamingModeVisibility;
-      });
+      // ### Section visibility state objects ###
+      var layersVisibility = { value: true };
+      var aggSettingsVisibility = { value: true };
+      var streamingModeVisibility = { value: true };
+      var spatialReferenceVisibility = { value: true };
+      var lodSRVisibility = { value: true };
+      var aggLabelsVisibility = { value: true };
+
+      // ### Section toggle event handlers ###
+      on(dojo.byId("layersToggle"), "click", createSectionToggle("layersSection", "layersToggle", layersVisibility));
+      on(dojo.byId("aggSettingsToggle"), "click", createSectionToggle("aggSettingsSection", "aggSettingsToggle", aggSettingsVisibility));
+      on(dojo.byId("streamingModeToggle"), "click", createSectionToggle("streamingModeSection", "streamingModeToggle", streamingModeVisibility));
+      on(dojo.byId("spatialReferenceToggle"), "click", createSectionToggle("spatialReferenceSection", "spatialReferenceToggle", spatialReferenceVisibility));
+      on(dojo.byId("lodSRToggle"), "click", createSectionToggle("lodSRSection", "lodSRToggle", lodSRVisibility));
+      on(dojo.byId("aggLabelsToggle"), "click", createSectionToggle("aggLabelsMainSection", "aggLabelsToggle", aggLabelsVisibility));
 
       on(dojo.byId("setLayerButton"), "click", setFeatureLayers);
       on(dojo.byId("heatmap"), "change", toggleHeatmap);
@@ -194,6 +257,20 @@
 
       on(dijit.byId("statField"), "change", statFieldChanged);
       on(dijit.byId("statType"), "change", updateLayerFromUIChange);
+      
+      // ### Spatial Reference event handlers ###
+      on(dijit.byId("spatialReferenceSelect"), "change", onSpatialReferenceChange);
+      
+      // ### Aggregation Labels event handlers ###
+      on(dijit.byId("labelFont"), "change", updateLayerFromUIChange);
+      on(dojo.byId("labelSize"), "change", updateLayerFromUIChange);
+      on(dojo.byId("labelColor"), "change", updateLayerFromUIChange);
+      on(dojo.byId("labelOpacity"), "change", updateLayerFromUIChange);
+      on(dojo.byId("renderLabels"), "change", toggleLabels);
+      
+      // ### LOD SR event handlers ###
+      on(dijit.byId("lodSpatialReference"), "change", updateLayerFromUIChange);
+      on(dojo.byId("useLodSR"), "change", updateLayerFromUIChange);
 
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
@@ -297,6 +374,84 @@
         var selectedOption = control.getOptions(val);
         populateStatTypeSelectOptions(selectedOption);
         updateLayerFromUIChange();
+      }
+
+      // ### Spatial Reference Functions ###
+      /**
+       * Handles spatial reference system changes from the dropdown
+       * Updates global variables and re-projects map if necessary
+       * @param {string|number} newWkid - The new spatial reference WKID
+       */
+      function onSpatialReferenceChange(newWkid) {
+        _wkid = parseInt(newWkid);
+        if (_wkid === _map.spatialReference.wkid) {
+          // No need to project if same spatial reference
+          return;
+        }
+
+        // Project the map's current extent to the new spatial reference
+        projectMapToSR(_wkid);
+      }
+
+      /**
+       * Projects the current map extent to a new spatial reference system using geometry service
+       * @param {number} wkid - The target spatial reference WKID
+       */
+      function projectMapToSR(wkid) {
+        var sr = new SpatialReference(wkid);
+        var project = _gs.project([_map.extent], sr);
+        project.then(projectMapToSRSuccess, projectMapToSRFailure);
+      }
+
+      /**
+       * Success callback for map extent projection - rebuilds map with new extent
+       * @param {Array} result - Array of projected extents from geometry service
+       */
+      function projectMapToSRSuccess(result) {
+        console.log("Spatial reference projection successful: ", result);
+        if (result.length) {
+          var newMapExtent = result[0];
+          buildMap(newMapExtent);
+          dom.byId("currentMapSR").value = _wkid;
+        } else {
+          console.log("Projection was successful, but no results were returned.");
+        }
+      }
+
+      /**
+       * Error callback for map extent projection
+       * @param {Error} err - The projection error
+       */
+      function projectMapToSRFailure(err) {
+        console.log("Project Map to SR failed: ", err);
+        // Fallback: build map with default extent for the new spatial reference
+        var defaultExtent = new Extent({
+          "xmin": -20037508.342787,
+          "ymin": -20037508.342787,
+          "xmax": 20037508.342787,
+          "ymax": 20037508.342787,
+          "spatialReference": {"wkid": _wkid}
+        });
+        buildMap(defaultExtent);
+        dom.byId("currentMapSR").value = _wkid;
+      }
+
+
+      // ### Aggregation Labels Functions ###
+      /**
+       * Toggles the visibility of aggregation labels and their control panel
+       * @param {Event} evt - The change event from the checkbox
+       */
+      function toggleLabels(evt) {
+        // Toggle label visibility and show/hide label controls
+        if (evt.target.id === "renderLabels") {
+          if (dojo.byId("renderLabels").checked === true) {
+            dojo.byId("aggLabelsSection").style.display = "block";
+          } else {
+            dojo.byId("aggLabelsSection").style.display = "none";
+          }
+          updateLayerFromUIChange();
+        }
       }
 
       function populateStatTypeSelectOptions(selectedOption) {
@@ -459,8 +614,13 @@
         });
 
         aggregationsLayer.setRenderer(createRenderer("Aggregation"));
-        var label = createRenderer("Label");
-        aggregationsLayer.setLabelingInfo([label]);
+        
+        // Only set labels if renderLabels is checked
+        if (dojo.byId("renderLabels") && dojo.byId("renderLabels").checked === true) {
+          var label = createRenderer("Label");
+          aggregationsLayer.setLabelingInfo([label]);
+        }
+        
         _map.addLayer(aggregationsLayer);
         //console.log("Client Aggregations Layer added");
 
@@ -648,6 +808,20 @@
           // ### Add Labels ###
         } else if (type === "Label") {
 
+          // Get label configuration from UI controls
+          var labelFont = dijit.byId("labelFont") ? dijit.byId("labelFont").value : "arial";
+          var labelSize = dojo.byId("labelSize") ? dojo.byId("labelSize").value + "pt" : "8pt";
+          var labelColorHex = dojo.byId("labelColor") ? dojo.byId("labelColor").value : "#000000";
+          var labelOpacity = dojo.byId("labelOpacity") ? parseFloat(dojo.byId("labelOpacity").value) : 1.0;
+          
+          // Convert hex color to RGB with opacity
+          var labelColor = hexToRgb(labelColorHex);
+          if (labelColor) {
+            labelColor = [labelColor.r, labelColor.g, labelColor.b, labelOpacity];
+          } else {
+            labelColor = [0, 0, 0, labelOpacity]; // Default to black
+          }
+
           // create a text symbol and renderer to define the style of labels
           var labelJson = {
             "labelExpressionInfo": {
@@ -656,13 +830,30 @@
             "labelPlacement": "always-horizontal"
           };
           var lc = new LabelClass(labelJson);
-          var gridLabel = new TextSymbol().setColor(new Color([0, 0, 0]));
-          gridLabel.font.setSize("8pt");
-          gridLabel.font.setFamily("arial");
+          var gridLabel = new TextSymbol().setColor(new Color(labelColor));
+          gridLabel.font.setSize(labelSize);
+          gridLabel.font.setFamily(labelFont);
           lc.symbol = gridLabel;
           var renderer = lc;
         }
         return renderer;
+      }
+
+      // ### Utility Functions ###
+      /**
+       * Converts a hexadecimal color string to RGB values
+       * Used for processing label color settings from the UI
+       * @param {string} hex - Hexadecimal color string (e.g., "#FF0000")
+       * @returns {Object|null} RGB object with r, g, b properties or null if invalid
+       */
+      function hexToRgb(hex) {
+        // Convert hex color to RGB using regex pattern matching
+        var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : null;
       }
 
       //#############################################################################################
@@ -693,7 +884,14 @@
         }
 
         var url = dojo.byId("inputUrl").value;
-        url += "/query?lod=" + lod + "&lodType=" + style + "&lodSubType=" + subStyle + "&outSR=102100&returnGeometry=true" + timeParam;
+        
+        // Determine output spatial reference - use LOD SR if enabled, otherwise use current map SR
+        var outputSR = _currentMapSR;
+        if (dojo.byId("useLodSR") && dojo.byId("useLodSR").checked === true) {
+          outputSR = dijit.byId("lodSpatialReference").value;
+        }
+        
+        url += "/query?lod=" + lod + "&lodType=" + style + "&lodSubType=" + subStyle + "&outSR=" + outputSR + "&returnGeometry=true" + timeParam;
 
         // TODO - for now, add the spatial filter to the query, only for point geometry layers
         if (_layerInfo && _layerInfo.geometryType && _layerInfo.geometryType === "esriGeometryPoint") {
@@ -718,7 +916,13 @@
       }
 
       function updateLayerFromUIChange(setMapExtent) {
-        var sr = new SpatialReference(102100);
+        // Use current map spatial reference or LOD SR if enabled
+        var outputSR = _currentMapSR;
+        if (dojo.byId("useLodSR") && dojo.byId("useLodSR").checked === true) {
+          outputSR = dijit.byId("lodSpatialReference").value;
+        }
+        var sr = new SpatialReference(parseInt(outputSR));
+        var mapSR = new SpatialReference(_map.spatialReference.wkid);
 
         var url = buildQueryUrlFromUI();
         var request = esriRequest({
@@ -737,67 +941,130 @@
 
             var weightsArray = [];
 
-            // create features (graphics) from the response features
-            var graphics = array.map(response.features, function (feature, i) {
-                // make sure the geometry has the correct spatial reference
-                if (feature && feature.geometry && (!feature.geometry.hasOwnProperty('spatialReference') || !feature.geometry['spatialReference'])) {
-                  feature.geometry['spatialReference'] = sr;
+            // If the output SR is different from map SR, we need to project geometries
+            if (parseInt(outputSR) !== _map.spatialReference.wkid) {
+              // Project all geometries to map's spatial reference
+              var geometriesToProject = [];
+              array.forEach(response.features, function(feature) {
+                if (feature && feature.geometry) {
+                  feature.geometry.spatialReference = sr.toJson();
+                  geometriesToProject.push(new Polygon(feature.geometry));
                 }
-
-                // create the polygon
-                var geometry = new Polygon(feature.geometry);
-
-                if (dojo.byId("heatmap").checked === true) {
-                  geometry = geometry.getCentroid();
-                }
-
-                var weight = 0;
-                if (dojo.byId("useStats").checked === true) {
-                  var weightFieldName = dijit.byId("statField").value + "_" + dijit.byId("statType").value;
-                  weight = feature.attributes[weightFieldName];
-                } else {
-                  weight = feature.attributes["Count"];
-                }
-                feature.attributes["Weight"] = number.round(weight, 2);
-                weightsArray.push(weight);
-
-                var graphic = new Graphic(geometry, null, feature.attributes, null);
-                return graphic;
-            });
-
-            // add features to the respective selected layer and adjust renderer
-            var selectedLayer = null;
-            var otherLayer = null;
-            if (dojo.byId("heatmap").checked === true) {
-              selectedLayer = heatmapLayer;
-              otherLayer = aggregationsLayer;
-              heatmapLayer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
-            } else {
-              selectedLayer = aggregationsLayer;
-              otherLayer = heatmapLayer;
-
-              // calculate min and max weight values to adjust heatmap renderer
-              _minValue = Math.min.apply(null, weightsArray);
-              _maxValue = Math.max.apply(null, weightsArray);
-              aggregationsLayer.renderer.normalizationTotal = _maxValue;
-            }
-
-            // update features layer with nre features (graphics)
-            otherLayer.setVisibility(false);
-            selectedLayer.clear();
-            selectedLayer.setVisibility(true);
-            selectedLayer.applyEdits(graphics, null, null)
-              .then(function () {
-                if (setMapExtent && graphics.length > 0) {
-                  var layerExtent = graphicsUtils.graphicsExtent(graphics);
-                  if (layerExtent)
-                    _map.setExtent(layerExtent.expand(1.0));
-                }
-                selectedLayer.refresh();
               });
+
+              if (geometriesToProject.length > 0) {
+                var projectTask = _gs.project(geometriesToProject, mapSR);
+                projectTask.then(function(projectedGeometries) {
+                  processProjectedFeatures(response.features, projectedGeometries, weightsArray, setMapExtent);
+                }, function(error) {
+                  console.log("Error projecting geometries:", error);
+                  // Fallback: process without projection
+                  processFeatures(response.features, weightsArray, setMapExtent);
+                });
+              }
+            } else {
+              // No projection needed
+              processFeatures(response.features, weightsArray, setMapExtent);
+            }
           },
           function (error) {
             console.log("Error querying the aggregations: ", error.message);
+          });
+      }
+
+      function processProjectedFeatures(features, projectedGeometries, weightsArray, setMapExtent) {
+        var graphics = array.map(features, function (feature, i) {
+          var geometry = projectedGeometries[i];
+
+          if (dojo.byId("heatmap").checked === true) {
+            geometry = geometry.getCentroid();
+          }
+
+          var weight = 0;
+          if (dojo.byId("useStats").checked === true) {
+            var weightFieldName = dijit.byId("statField").value + "_" + dijit.byId("statType").value;
+            weight = feature.attributes[weightFieldName];
+          } else {
+            weight = feature.attributes["Count"];
+          }
+          feature.attributes["Weight"] = number.round(weight, 2);
+          weightsArray.push(weight);
+
+          var graphic = new Graphic(geometry, null, feature.attributes, null);
+          return graphic;
+        });
+
+        updateLayersWithGraphics(graphics, weightsArray, setMapExtent);
+      }
+
+      function processFeatures(features, weightsArray, setMapExtent) {
+        var mapSR = new SpatialReference(_map.spatialReference.wkid);
+        
+        // create features (graphics) from the response features
+        var graphics = array.map(features, function (feature, i) {
+            // Ensure the geometry has the correct spatial reference that matches the map
+            if (feature && feature.geometry) {
+              // Set the spatial reference to match the map's spatial reference
+              feature.geometry['spatialReference'] = mapSR.toJson();
+            }
+
+            // create the polygon
+            var geometry = new Polygon(feature.geometry);
+
+            if (dojo.byId("heatmap").checked === true) {
+              geometry = geometry.getCentroid();
+            }
+
+            var weight = 0;
+            if (dojo.byId("useStats").checked === true) {
+              var weightFieldName = dijit.byId("statField").value + "_" + dijit.byId("statType").value;
+              weight = feature.attributes[weightFieldName];
+            } else {
+              weight = feature.attributes["Count"];
+            }
+            feature.attributes["Weight"] = number.round(weight, 2);
+            weightsArray.push(weight);
+
+            var graphic = new Graphic(geometry, null, feature.attributes, null);
+            return graphic;
+        });
+
+        updateLayersWithGraphics(graphics, weightsArray, setMapExtent);
+      }
+
+      function updateLayersWithGraphics(graphics, weightsArray, setMapExtent) {
+        var aggregationsLayer = _map.getLayer("aggregations");
+        var heatmapLayer = _map.getLayer("heatmap");
+
+        // add features to the respective selected layer and adjust renderer
+        var selectedLayer = null;
+        var otherLayer = null;
+        if (dojo.byId("heatmap").checked === true) {
+          selectedLayer = heatmapLayer;
+          otherLayer = aggregationsLayer;
+          heatmapLayer.renderer.setBlurRadius(dojo.byId("blurRadius").value);
+        } else {
+          selectedLayer = aggregationsLayer;
+          otherLayer = heatmapLayer;
+
+          // calculate min and max weight values to adjust heatmap renderer
+          _minValue = Math.min.apply(null, weightsArray);
+          _maxValue = Math.max.apply(null, weightsArray);
+          aggregationsLayer.renderer.normalizationTotal = _maxValue;
+        }
+
+        // update features layer with new features (graphics)
+        otherLayer.setVisibility(false);
+        selectedLayer.clear();
+        selectedLayer.setVisibility(true);
+        selectedLayer.applyEdits(graphics, null, null)
+          .then(function () {
+            if (setMapExtent && graphics.length > 0) {
+              var layerExtent = graphicsUtils.graphicsExtent(graphics);
+              if (layerExtent)
+                _map.setExtent(layerExtent.expand(1.0));
+            }
+            selectedLayer.refresh();
           });
       }
 
@@ -935,6 +1202,41 @@
       </div>
     </section>
 
+    <!-- Spatial Reference Section -->
+    <section id="spatialReferenceSection">
+      <div class="config-header">
+        <h2>Spatial Reference</h2>
+        <div class="header-actions-group">
+          <a href="#" id="spatialReferenceToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
+      </div>
+      <div class="config-content">
+        <div class="input-group">
+          <select name="spatialReferenceSelect" data-dojo-type="dijit/form/Select" id="spatialReferenceSelect" style="width: 200px;">
+            <option value="102003">102003 (Albers)</option>
+            <option value="102100" selected="selected">102100 (Web Mercator)</option>
+            <option value="4326">4326 (WGS84)</option>
+            <option value="54030">54030 (Robinson)</option>
+            <option value="26911">26911 (NAD83 / UTM zone 11N)</option>
+            <option value="27700">27700 (British National Grid)</option>
+            <option value="2243">2243 (Idaho West, State Plane)</option>
+            <option value="2244">2244 (Indiana East, State Plane)</option>
+            <option value="2248">2248 (Maryland, State Plane)</option>
+            <option value="3995">3995 (Arctic Polar Stereographic)</option>
+            <option value="2271">2271 (NAD_1983_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
+            <option value="2272">2272 (NAD_1983_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
+            <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
+            <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
+          </select>
+          <label for="spatialReferenceSelect">Coordinate System</label>
+        </div>
+        <div class="input-group">
+          <input type="text" id="currentMapSR" value="102100" readonly style="width: 80px;" />
+          <label for="currentMapSR">Current Map SR</label>
+        </div>
+      </div>
+    </section>
+
     <section id="aggSettingsSection">
       <div class="config-header">
         <h2>Aggregation Settings</h2>
@@ -988,6 +1290,81 @@
           </select>
           <select name="statType"  data-dojo-type="dijit/form/Select" data-dojo-attach-point="statType" id="statType" style="width: 250px; margin-top:3px; display:none; float:left;">
           </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOD Spatial Reference Section -->
+    <section id="lodSRSection">
+      <div class="config-header">
+        <h2>LOD Spatial Reference</h2>
+        <div class="header-actions-group">
+          <a href="#" id="lodSRToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
+      </div>
+      <div class="config-content">
+        <div class="input-group">
+          <select name="lodSpatialReference" data-dojo-type="dijit/form/Select" id="lodSpatialReference" style="width: 200px;">
+            <option value="102003">102003 (Albers)</option>
+            <option value="102100" selected="selected">102100 (Web Mercator)</option>
+            <option value="4326">4326 (WGS84)</option>
+            <option value="54030">54030 (Robinson)</option>
+            <option value="26911">26911 (NAD83 / UTM zone 11N)</option>
+            <option value="27700">27700 (British National Grid)</option>
+            <option value="2243">2243 (Idaho West, State Plane)</option>
+            <option value="2244">2244 (Indiana East, State Plane)</option>
+            <option value="2248">2248 (Maryland, State Plane)</option>
+            <option value="3995">3995 (Arctic Polar Stereographic)</option>
+            <option value="2271">2271 (NAD_1983_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
+            <option value="2272">2272 (NAD_1983_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
+            <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
+            <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
+          </select>
+          <label for="lodSpatialReference">LOD Coordinate System</label>
+        </div>
+        <div class="input-group">
+          <input type="checkbox" id="useLodSR" />
+          <label for="useLodSR">Use Different SR for LOD</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Aggregation Labels Section -->
+    <section id="aggLabelsMainSection">
+      <div class="config-header">
+        <h2>Aggregation Labels</h2>
+        <div class="header-actions-group">
+          <a href="#" id="aggLabelsToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
+      </div>
+      <div class="config-content">
+        <div class="input-group">
+          <input type="checkbox" id="renderLabels" />
+          <label for="renderLabels">Show Labels</label>
+        </div>
+        <div id="aggLabelsSection" style="display:none;">
+          <div class="input-group">
+            <select name="labelFont" data-dojo-type="dijit/form/Select" id="labelFont" style="width: 150px;">
+              <option value="arial" selected="selected">Arial</option>
+              <option value="helvetica">Helvetica</option>
+              <option value="times">Times</option>
+              <option value="courier">Courier</option>
+              <option value="verdana">Verdana</option>
+            </select>
+            <label for="labelFont">Font Family</label>
+          </div>
+          <div class="input-group">
+            <input type="number" id="labelSize" value="8" min="6" max="24" style="width: 60px;" />
+            <label for="labelSize">Font Size (pt)</label>
+          </div>
+          <div class="input-group">
+            <input type="color" id="labelColor" value="#000000" style="width: 50px;" />
+            <label for="labelColor">Font Color</label>
+          </div>
+          <div class="input-group">
+            <input type="range" id="labelOpacity" min="0" max="1" step="0.1" value="1" style="width: 100px;" />
+            <label for="labelOpacity">Opacity</label>
+          </div>
         </div>
       </div>
     </section>
