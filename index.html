@@ -171,22 +171,36 @@
           basemapContainer.innerHTML = "";
         }
 
-        // Create new map with the specified extent
-        // Note: Keep map in Web Mercator for basemap compatibility, project data as needed
+        // Create new map with the specified extent and selected spatial reference
         _map = new Map("map", {
           extent: mapExtent,
           showLabels: true,
-          showAttribution: false
+          showAttribution: false,
+          spatialReference: new SpatialReference(_wkid)
         });
 
-        // Recreate basemap gallery for new map with unique ID
-        var galleryId = "basemapGallery_" + Date.now();
-        _basemapGallery = new BasemapGallery({
-          showArcGISBasemaps: true,
-          map: _map,
-          id: galleryId
-        }, "basemapGallery");
-        _basemapGallery.startup();
+        // Only create basemap gallery for Web Mercator (102100) spatial reference
+        // Other spatial references are not compatible with standard basemaps
+        var basemapContainer = dom.byId("basemapGallery");
+        if (_wkid === 102100) {
+          // Show basemap gallery container for Web Mercator
+          if (basemapContainer && basemapContainer.parentNode) {
+            basemapContainer.parentNode.style.display = "block";
+          }
+          
+          var galleryId = "basemapGallery_" + Date.now();
+          _basemapGallery = new BasemapGallery({
+            showArcGISBasemaps: true,
+            map: _map,
+            id: galleryId
+          }, "basemapGallery");
+          _basemapGallery.startup();
+        } else {
+          // For non-Web Mercator spatial references, hide the basemap gallery
+          if (basemapContainer && basemapContainer.parentNode) {
+            basemapContainer.parentNode.style.display = "none";
+          }
+        }
 
         // Set up map load event
         _map.on("load", setFeatureLayers);
@@ -384,10 +398,15 @@
        */
       function onSpatialReferenceChange(newWkid) {
         _wkid = parseInt(newWkid);
-        if (_wkid === _map.spatialReference.wkid) {
+        
+        // Check if map exists and has spatial reference before comparing
+        if (_map && _map.spatialReference && _wkid === _map.spatialReference.wkid) {
           // No need to project if same spatial reference
           return;
         }
+
+        // Update current map SR tracking variable
+        _currentMapSR = _wkid;
 
         // Project the map's current extent to the new spatial reference
         projectMapToSR(_wkid);
@@ -921,8 +940,6 @@
         if (dojo.byId("useLodSR") && dojo.byId("useLodSR").checked === true) {
           outputSR = dijit.byId("lodSpatialReference").value;
         }
-        var sr = new SpatialReference(parseInt(outputSR));
-        var mapSR = new SpatialReference(_map.spatialReference.wkid);
 
         var url = buildQueryUrlFromUI();
         var request = esriRequest({
@@ -941,31 +958,8 @@
 
             var weightsArray = [];
 
-            // If the output SR is different from map SR, we need to project geometries
-            if (parseInt(outputSR) !== _map.spatialReference.wkid) {
-              // Project all geometries to map's spatial reference
-              var geometriesToProject = [];
-              array.forEach(response.features, function(feature) {
-                if (feature && feature.geometry) {
-                  feature.geometry.spatialReference = sr.toJson();
-                  geometriesToProject.push(new Polygon(feature.geometry));
-                }
-              });
-
-              if (geometriesToProject.length > 0) {
-                var projectTask = _gs.project(geometriesToProject, mapSR);
-                projectTask.then(function(projectedGeometries) {
-                  processProjectedFeatures(response.features, projectedGeometries, weightsArray, setMapExtent);
-                }, function(error) {
-                  console.log("Error projecting geometries:", error);
-                  // Fallback: process without projection
-                  processFeatures(response.features, weightsArray, setMapExtent);
-                });
-              }
-            } else {
-              // No projection needed
-              processFeatures(response.features, weightsArray, setMapExtent);
-            }
+            // Since map and query results are in the same SR, no projection needed
+            processFeatures(response.features, weightsArray, setMapExtent);
           },
           function (error) {
             console.log("Error querying the aggregations: ", error.message);
@@ -998,16 +992,11 @@
       }
 
       function processFeatures(features, weightsArray, setMapExtent) {
-        var mapSR = new SpatialReference(_map.spatialReference.wkid);
-        
         // create features (graphics) from the response features
         var graphics = array.map(features, function (feature, i) {
-            // Ensure the geometry has the correct spatial reference that matches the map
-            if (feature && feature.geometry) {
-              // Set the spatial reference to match the map's spatial reference
-              feature.geometry['spatialReference'] = mapSR.toJson();
-            }
-
+            // The geometry should already be in the correct spatial reference from the query
+            // No need to modify the spatial reference since map and query results match
+            
             // create the polygon
             var geometry = new Polygon(feature.geometry);
 
