@@ -252,10 +252,11 @@
       on(dijit.byId("spatialReferenceSelect"), "change", onSpatialReferenceChange);
       
       // ### Aggregation Labels event handlers ###
-      on(dijit.byId("labelFont"), "change", updateLayerFromUIChange);
-      on(dojo.byId("labelSize"), "change", updateLayerFromUIChange);
-      on(dojo.byId("labelColor"), "change", updateLayerFromUIChange);
-      on(dojo.byId("labelOpacity"), "change", updateLayerFromUIChange);
+      on(dijit.byId("labelFont"), "change", updateLayerLabelFromUIChange);
+      on(dijit.byId("labelStyle"), "change", updateLayerLabelFromUIChange);
+      on(dojo.byId("labelSize"), "change", updateLayerLabelFromUIChange);
+      on(dojo.byId("labelColor"), "change", updateLayerLabelFromUIChange);
+      on(dojo.byId("labelOpacity"), "change", updateLayerLabelFromUIChange);
       on(dojo.byId("renderLabels"), "change", toggleLabels);
       
       // ### LOD SR event handlers ###
@@ -809,7 +810,8 @@
 
           // Get label configuration from UI controls
           var labelFont = dijit.byId("labelFont") ? dijit.byId("labelFont").value : "arial";
-          var labelSize = dojo.byId("labelSize") ? dojo.byId("labelSize").value + "pt" : "8pt";
+          var labelStyle = dijit.byId("labelStyle") ? dijit.byId("labelStyle").value : "normal";
+          var labelSize = dojo.byId("labelSize") ? dojo.byId("labelSize").value + "pt" : "9pt";
           var labelColorHex = dojo.byId("labelColor") ? dojo.byId("labelColor").value : "#000000";
           var labelOpacity = dojo.byId("labelOpacity") ? parseFloat(dojo.byId("labelOpacity").value) : 1.0;
           
@@ -832,6 +834,8 @@
           var gridLabel = new TextSymbol().setColor(new Color(labelColor));
           gridLabel.font.setSize(labelSize);
           gridLabel.font.setFamily(labelFont);
+          //gridLabel.font.setStyle(labelStyle);
+          gridLabel.font.setWeight(labelStyle); // "bold"
           lc.symbol = gridLabel;
           var renderer = lc;
         }
@@ -915,12 +919,14 @@
         return url;
       }
 
+      function updateLayerLabelFromUIChange() {
+        setFeatureLayers();
+        updateLayerFromUIChange();
+      }
+
       function updateLayerFromUIChange(setMapExtent) {
         // Use current map spatial reference or LOD SR if enabled
         var outputSR = _currentMapSR;
-        if (dojo.byId("useLodSR") && dojo.byId("useLodSR").checked === true) {
-          outputSR = dijit.byId("lodSpatialReference").value;
-        }
         var sr = new SpatialReference(parseInt(outputSR));
         var mapSR = new SpatialReference(_map.spatialReference.wkid);
 
@@ -1371,47 +1377,79 @@
       <div class="config-header">
         <h2>Aggregation Labels</h2>
         <div class="header-actions-group">
+          <input type="checkbox" id="renderLabels" checked="true"/>
           <a href="#" id="aggLabelsToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
       </div>
-      <div class="config-content">
-        <!-- Show Labels -->
-        <div class="input-group">
-          <input type="checkbox" id="renderLabels" />
-          <label for="renderLabels">Show Labels</label>
-        </div>
+
+      <div id="aggLabelsSection" class="config-content">
 
         <!-- Label Font -->
-        <div id="aggLabelsSection" style="display:none;">
-          <div class="input-group">
-            <label for="labelFont">Font Family</label>
-            <select name="labelFont" data-dojo-type="dijit/form/Select" id="labelFont" style="width: 150px;">
-              <option value="arial" selected="selected">Arial</option>
-              <option value="helvetica">Helvetica</option>
-              <option value="times">Times</option>
-              <option value="courier">Courier</option>
-              <option value="verdana">Verdana</option>
-            </select>
-          </div>
-
-          <!-- Label Size -->
-          <div class="input-group">
-            <label for="labelSize">Font Size (pt)</label>
-            <input type="number" id="labelSize" value="8" min="6" max="24" style="width: 60px;" />
-          </div>
-
-          <!-- Label Color -->
-          <div class="input-group">
-            <label for="labelColor">Font Color</label>
-            <input type="color" id="labelColor" value="#000000" style="width: 50px;" />
-          </div>
-
-          <!-- Label Opacity -->
-          <div class="input-group">
-            <label for="labelOpacity">Opacity</label>
-            <input type="range" id="labelOpacity" min="0" max="1" step="0.1" value="1" style="width: 100px;" />
-          </div>
+        <div class="input-group input-group-full">
+          <select name="labelFont" data-dojo-type="dijit/form/Select" id="labelFont" style="width: 99%;">
+            <option value="arial" selected="selected">Arial</option>
+            <option value="arial black">Arial Black</option>
+            <option value="arial narrow">Arial Narrow</option>
+            <option value="brush script mt">Brush Script MT</option>
+            <option value="comic sans ms">Comic Sans MS</option>
+            <option value="courier">Courier</option>
+            <option value="courier new">Courier New</option>
+            <option value="cursive">Cursive</option>  
+            <option value="custom">Custom</option>
+            <option value="fantasy">Fantasy</option> 
+            <option value="garamond">Garamond</option>
+            <option value="georgia">Georgia</option>
+            <option value="helvetica">Helvetica</option>
+            <option value="impact">Impact</option>
+            <option value="lucida console">Lucida Console</option>
+            <option value="lucida grande">Lucida Grande</option>
+            <option value="lucida sans unicode">Lucida Sans Unicode</option>
+            <option value="monospace">Monospace</option>
+            <option value="palatino">Palatino</option>
+            <option value="segoe ui">Segoe UI</option>
+            <option value="sans-serif">Sans Serif</option>
+            <option value="serif">Serif</option>
+            <option value="symbol">Symbol</option>
+            <option value="tahoma">Tahoma</option>
+            <option value="times">Times</option>
+            <option value="times new roman">Times New Roman</option>
+            <option value="trebuchet ms">Trebuchet MS</option>
+            <option value="verdana">Verdana</option>
+            <option value="webdings">Webdings</option>
+            <option value="wingdings">Wingdings</option>
+            <option value="zapf dingbats">Zapf Dingbats</option>
+          </select>
+          <label for="labelFont">Font</label>
         </div>
+
+        <!-- Label Style -->
+        <div class="input-group input-group-full">
+          <select name="labelStyle" data-dojo-type="dijit/form/Select" id="labelStyle" style="width: 99%;">
+            <option value="PLAIN">Plain</option>
+            <option value="BOLD">Bold</option>
+            <option value="ITALIC">Italic</option>
+            <option value="BOLD ITALIC">Bold Italic</option>
+          </select>
+          <label for="labelStyle">Style</label>
+        </div>
+
+        <!-- Label Size -->
+        <div class="input-group">
+          <input type="number" id="labelSize" value="9" style="width: 60px;"/>
+          <label for="labelSize">Size</label>
+        </div>
+        <!-- Label Color -->
+        <div class="input-group">
+          <input type="color" value="#000000" id="labelColor" style="width: 60px;"/>
+          <label for="labelColor">Color</label>
+        </div>
+        <!-- Label Opacity -->
+        <div class="input-group">
+          <!--input type="number" min="0" max="255" id="labelColorA" value="255" style="width: 60px;"/-->
+          <input type="range" id="labelOpacity" min="0" max="1" step="0.02" value="1" style="width: 100px;" /-->
+          <label for="labelColorA">Opacity</label>
+        </div>
+
       </div>
     </section>
 
