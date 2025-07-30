@@ -449,7 +449,12 @@
         statTypeSelect.removeOption(statTypeSelect.getOptions());
 
         // find the field by name
-        var fieldName = dijit.byId("statField").value;
+        var statFieldElement = dijit.byId("statField");
+        if (!statFieldElement) {
+          console.warn("Element with ID 'statField' not found.");
+          return;
+        }
+        var fieldName = statFieldElement.value;
         var field = null;
         for (i = 0; i < _layerInfo.fields.length; i++) {
           var currentField = _layerInfo.fields[i];
@@ -471,7 +476,7 @@
                           {'label':'Count', 'value':'count'} ];
           statTypeSelect.addOption(options);
         } else {
-          // add only the count and count distince types
+          // add only the count and count distinct types
           var options = [ {'label':'Count Distinct', 'value':'countdistinct'},
                           {'label':'Count', 'value':'count'} ];
           statTypeSelect.addOption(options);
@@ -1210,6 +1215,7 @@
     <i id="expanderIcon" class="flat-chevron-left"></i>
   </div>
   <div id="controls">
+    <!-- [Section 1] Layers -->
     <section id="layersSection">
       <div class="config-header">
         <h2>Layers</h2>
@@ -1217,42 +1223,42 @@
           <a href="#" id="layersToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
       </div>
+
       <div class="config-content">
-        <input type="text" id="inputUrl" value="https://storm.esri.com:6443/arcgis/rest/services/faa/MapServer/0" />
-        <input type="button" class="button" id="setLayerButton" value="Set Layer" />
-      </div>
-    </section>
+        <!-- Layer -->
+        <div class="input-row">
+          <input type="text" id="inputUrl" value="https://storm.esri.com:6443/arcgis/rest/services/faa/MapServer/0" />
+          <input type="button" class="button" id="setLayerButton" value="Set Layer" />
+        </div>
 
-    <!-- Basemap -->
-    <div>
-      <label for="basemapUrl">Basemap</label>
-      <select id="basemapUrl" name="basemapUrl" style="width: 120px;">
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer">Topographic</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer">Streets</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer">National Geographic</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer">Light Gray Canvas</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer">Dark Gray Canvas</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer">Imagery</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Terrain_Base/MapServer">Terrain</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Shaded_Relief/MapServer">Shaded Relief</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Transportation/MapServer">Transportation</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Reference_Overlay/MapServer">World Reference</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Ocean/World_Ocean_Base/MapServer">Oceans</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer">USA Topo Maps</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Specialty/World_Navigation_Charts/MapServer">Navigation Charts</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer">Boundaries and Places</option>
-        <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places_Alternate/MapServer">Boundaries and Places Alternate</option>
-        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer">USGS National Map</option>
-        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer">USGS Imagery</option>
-        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer">USGS Imagery with Labels</option>
-        <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer">USGS Hydro</option>
-      </select>
+        <!-- Select Basemap -->
+        <div class="input-group input-group-full">
+          <select id="basemapUrl" name="basemapUrl" style="width: 120px;">
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer">Topographic</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer">Streets</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer">National Geographic</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer">Light Gray Canvas</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer">Dark Gray Canvas</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer">Imagery</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Terrain_Base/MapServer">Terrain</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Shaded_Relief/MapServer">Shaded Relief</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Transportation/MapServer">Transportation</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Reference_Overlay/MapServer">World Reference</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Ocean/World_Ocean_Base/MapServer">Oceans</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer">USA Topo Maps</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Specialty/World_Navigation_Charts/MapServer">Navigation Charts</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer">Boundaries and Places</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places_Alternate/MapServer">Boundaries and Places Alternate</option>
+            <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer">USGS National Map</option>
+            <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer">USGS Imagery</option>
+            <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer">USGS Imagery with Labels</option>
+            <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer">USGS Hydro</option>
+          </select>
+          <label for="basemapUrl">Basemap</label>
+        </div>
 
-
-      <!-- Map SR -->
-      <div class="config-content">
-        <div class="input-group">
-          <label for="spatialReferenceSelect">Spatial Reference</label>
+        <!-- Select Map SR -->
+        <div class="input-group input-group-full">
           <select name="spatialReferenceSelect" data-dojo-type="dijit/form/Select" id="spatialReferenceSelect" style="width: 200px;">
             <option value="102003">102003 (Albers)</option>
             <option value="102100" selected="selected">102100 (Web Mercator)</option>
@@ -1269,14 +1275,18 @@
             <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
             <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
           </select>
+          <label for="spatialReferenceSelect">Spatial Reference</label>
         </div>
-        <div class="input-group">
-          <label for="currentMapSR">Current Map SR</label>
-          <input type="text" id="currentMapSR" value="102100" readonly style="width: 80px;" />
-        </div>
-    </div>
 
-    <!-- Aggregation Settings -->
+        <!-- Current Map SR -->
+        <div class="input-group input-group-full">
+          <input type="text" id="currentMapSR" value="102100" readonly style="width: 80px;" />
+          <label for="currentMapSR">Current</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- [Section 2] Aggregation Settings -->
     <section id="aggSettingsSection">
       <div class="config-header">
         <h2>Aggregation Settings</h2>
@@ -1318,8 +1328,8 @@
           <label for="heatmap">Heatmap</label>
         </div>
         <div id="radius" class="input-group" style="display:none">
-          <input type="number" id="blurRadius" value="10" style="width: 40px;" />
           <label for="blurRadius">BlurRadius</label>
+          <input type="number" id="blurRadius" value="10" style="width: 40px;" />
         </div>
         <div class="input-group">
           <input type="checkbox" id="useStats" style="top:4px;"/>
@@ -1335,33 +1345,28 @@
 
       <!-- LOD SR -->
       <div class="config-content">
-        <div class="input-group">
-          <input type="checkbox" id="useLodSR" />
-          <label for="useLodSR">Use LOD SR</label>
-        </div>
-        <div class="input-group">
-          <select name="lodSpatialReference" data-dojo-type="dijit/form/Select" id="lodSpatialReference" style="width: 200px;">
-            <option value="102003">102003 (Albers)</option>
-            <option value="102100" selected="selected">102100 (Web Mercator)</option>
-            <option value="4326">4326 (WGS84)</option>
-            <option value="54030">54030 (Robinson)</option>
-            <option value="26911">26911 (NAD83 / UTM zone 11N)</option>
-            <option value="27700">27700 (British National Grid)</option>
-            <option value="2243">2243 (Idaho West, State Plane)</option>
-            <option value="2244">2244 (Indiana East, State Plane)</option>
-            <option value="2248">2248 (Maryland, State Plane)</option>
-            <option value="3995">3995 (Arctic Polar Stereographic)</option>
-            <option value="2271">2271 (NAD_1983_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
-            <option value="2272">2272 (NAD_1983_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
-            <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
-            <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
-          </select>
-          <label for="lodSpatialReference">LOD SR</label>
-        </div>
-
+        <label for="useLodSR">LOD SR</label>
+        <input type="checkbox" id="useLodSR" />
+        <select name="lodSpatialReference" data-dojo-type="dijit/form/Select" id="lodSpatialReference" style="width: 200px;">
+          <option value="102003">102003 (Albers)</option>
+          <option value="102100" selected="selected">102100 (Web Mercator)</option>
+          <option value="4326">4326 (WGS84)</option>
+          <option value="54030">54030 (Robinson)</option>
+          <option value="26911">26911 (NAD83 / UTM zone 11N)</option>
+          <option value="27700">27700 (British National Grid)</option>
+          <option value="2243">2243 (Idaho West, State Plane)</option>
+          <option value="2244">2244 (Indiana East, State Plane)</option>
+          <option value="2248">2248 (Maryland, State Plane)</option>
+          <option value="3995">3995 (Arctic Polar Stereographic)</option>
+          <option value="2271">2271 (NAD_1983_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
+          <option value="2272">2272 (NAD_1983_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
+          <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
+          <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
+        </select>
+      </div>
     </section>
 
-    <!-- Aggregation Labels Section -->
+    <!-- [Section 3] Aggregation Labels Section -->
     <section id="aggLabelsMainSection">
       <div class="config-header">
         <h2>Aggregation Labels</h2>
@@ -1370,12 +1375,16 @@
         </div>
       </div>
       <div class="config-content">
+        <!-- Show Labels -->
         <div class="input-group">
           <input type="checkbox" id="renderLabels" />
           <label for="renderLabels">Show Labels</label>
         </div>
+
+        <!-- Label Font -->
         <div id="aggLabelsSection" style="display:none;">
           <div class="input-group">
+            <label for="labelFont">Font Family</label>
             <select name="labelFont" data-dojo-type="dijit/form/Select" id="labelFont" style="width: 150px;">
               <option value="arial" selected="selected">Arial</option>
               <option value="helvetica">Helvetica</option>
@@ -1383,24 +1392,30 @@
               <option value="courier">Courier</option>
               <option value="verdana">Verdana</option>
             </select>
-            <label for="labelFont">Font Family</label>
           </div>
+
+          <!-- Label Size -->
           <div class="input-group">
-            <input type="number" id="labelSize" value="8" min="6" max="24" style="width: 60px;" />
             <label for="labelSize">Font Size (pt)</label>
+            <input type="number" id="labelSize" value="8" min="6" max="24" style="width: 60px;" />
           </div>
+
+          <!-- Label Color -->
           <div class="input-group">
-            <input type="color" id="labelColor" value="#000000" style="width: 50px;" />
             <label for="labelColor">Font Color</label>
+            <input type="color" id="labelColor" value="#000000" style="width: 50px;" />
           </div>
+
+          <!-- Label Opacity -->
           <div class="input-group">
-            <input type="range" id="labelOpacity" min="0" max="1" step="0.1" value="1" style="width: 100px;" />
             <label for="labelOpacity">Opacity</label>
+            <input type="range" id="labelOpacity" min="0" max="1" step="0.1" value="1" style="width: 100px;" />
           </div>
         </div>
       </div>
     </section>
 
+    <!-- [Section 4] Streaming Mode Section -->
     <section id="streamingModeSection">
       <div class="config-header">
         <h2>Streaming Mode</h2>
@@ -1422,4 +1437,5 @@
 
   </div>
 </body>
+
 </html>
