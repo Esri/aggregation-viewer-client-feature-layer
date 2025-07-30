@@ -252,12 +252,12 @@
       on(dijit.byId("spatialReferenceSelect"), "change", onSpatialReferenceChange);
       
       // ### Aggregation Labels event handlers ###
+      on(dojo.byId("renderLabels"), "change", updateLayerLabelFromUIChange);
       on(dijit.byId("labelFont"), "change", updateLayerLabelFromUIChange);
       on(dijit.byId("labelStyle"), "change", updateLayerLabelFromUIChange);
       on(dojo.byId("labelSize"), "change", updateLayerLabelFromUIChange);
       on(dojo.byId("labelColor"), "change", updateLayerLabelFromUIChange);
       on(dojo.byId("labelOpacity"), "change", updateLayerLabelFromUIChange);
-      on(dojo.byId("renderLabels"), "change", toggleLabels);
       
       // ### LOD SR event handlers ###
       on(dijit.byId("lodSpatialReference"), "change", updateLayerFromUIChange);
@@ -830,14 +830,14 @@
             },
             "labelPlacement": "always-horizontal"
           };
-          var lc = new LabelClass(labelJson);
+          var labelClass = new LabelClass(labelJson);
           var gridLabel = new TextSymbol().setColor(new Color(labelColor));
           gridLabel.font.setSize(labelSize);
           gridLabel.font.setFamily(labelFont);
           //gridLabel.font.setStyle(labelStyle);
           gridLabel.font.setWeight(labelStyle); // "bold"
-          lc.symbol = gridLabel;
-          var renderer = lc;
+          labelClass.symbol = gridLabel;
+          var renderer = labelClass;
         }
         return renderer;
       }
@@ -920,6 +920,7 @@
       }
 
       function updateLayerLabelFromUIChange() {
+        //TODO: only replace the layer's renderer instead of resetting the feature layers
         setFeatureLayers();
         updateLayerFromUIChange();
       }
