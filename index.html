@@ -31,11 +31,11 @@
 
   <title>Aggregation Viewer - Client Side Feature Layer</title>
 
-  <link rel="stylesheet" href="https://js.arcgis.com/3.44/esri/css/esri.css">
+  <link rel="stylesheet" href="https://js.arcgis.com/3.46/esri/css/esri.css">
   <link rel="stylesheet" href="./featureServiceViewerStyles.css">
 
   <script src="https://use.fontawesome.com/9482a0b1d1.js"></script>
-  <script src="https://js.arcgis.com/3.44/"></script>
+  <script src="https://js.arcgis.com/3.46/"></script>
   <script>
     require([
       "dojo/parser",
@@ -255,6 +255,7 @@
       on(dojo.byId("renderLabels"), "change", updateLayerLabelFromUIChange);
       on(dijit.byId("labelFont"), "change", updateLayerLabelFromUIChange);
       on(dijit.byId("labelStyle"), "change", updateLayerLabelFromUIChange);
+      on(dijit.byId("labelWeight"), "change", updateLayerLabelFromUIChange);
       on(dojo.byId("labelSize"), "change", updateLayerLabelFromUIChange);
       on(dojo.byId("labelColor"), "change", updateLayerLabelFromUIChange);
       on(dojo.byId("labelOpacity"), "change", updateLayerLabelFromUIChange);
@@ -811,6 +812,7 @@
           // Get label configuration from UI controls
           var labelFont = dijit.byId("labelFont") ? dijit.byId("labelFont").value : "arial";
           var labelStyle = dijit.byId("labelStyle") ? dijit.byId("labelStyle").value : "normal";
+          var labelWeight = dijit.byId("labelWeight") ? dijit.byId("labelWeight").value : "normal";
           var labelSize = dojo.byId("labelSize") ? dojo.byId("labelSize").value + "pt" : "9pt";
           var labelColorHex = dojo.byId("labelColor") ? dojo.byId("labelColor").value : "#000000";
           var labelOpacity = dojo.byId("labelOpacity") ? parseFloat(dojo.byId("labelOpacity").value) : 1.0;
@@ -834,8 +836,8 @@
           var gridLabel = new TextSymbol().setColor(new Color(labelColor));
           gridLabel.font.setSize(labelSize);
           gridLabel.font.setFamily(labelFont);
-          //gridLabel.font.setStyle(labelStyle);
-          gridLabel.font.setWeight(labelStyle); // "bold"
+          gridLabel.font.setStyle(toFontStyle(labelStyle));
+          gridLabel.font.setWeight(toFontWeight(labelWeight));
           labelClass.symbol = gridLabel;
           var renderer = labelClass;
         }
@@ -843,6 +845,54 @@
       }
 
       // ### Utility Functions ###
+
+      /**
+       * Converts label style string to a valid font style
+       * @param {string} labelStyle - The label style string (e.g., "italic", "oblique")
+       * @returns {string} The corresponding font style ("normal", "italic", "oblique")
+       */
+      function toFontStyle(labelStyle) {
+        // Convert label style string to font style
+        if (!labelStyle || typeof labelStyle !== "string") {
+          return "normal"; // Default to normal if no style is provided
+        }
+
+        if (labelStyle.toLowerCase().includes("italic")) {
+          return "italic";
+        }
+        if (labelStyle.toLowerCase().includes("oblique")) {
+          return "oblique";
+        }
+
+        // default to normal if no specific style is found
+        return "normal";
+      }
+
+      /**
+       * Converts label weight string to a valid font weight
+       * @param {string} labelWeight - The label weight string (e.g., "bold", "bolder", "lighter")
+       * @returns {string} The corresponding font weight ("normal", "bold", "bolder", "lighter")
+       */
+      function toFontWeight(labelWeight) {
+        // Convert label style string to font weight
+        if (!labelWeight || typeof labelWeight !== "string") {
+          return "normal"; // Default to normal if no style is provided
+        }
+
+        if (labelWeight.toLowerCase().includes("bold")) {
+          return "bold";
+        }
+        if (labelWeight.toLowerCase().includes("bolder")) {
+          return "bolder";
+        }
+        if (labelWeight.toLowerCase().includes("lighter")) {
+          return "lighter";
+        }
+
+        // default to normal if no specific weight is found
+        return "normal";
+      }
+
       /**
        * Converts a hexadecimal color string to RGB values
        * Used for processing label color settings from the UI
@@ -1335,8 +1385,8 @@
           <label for="heatmap">Heatmap</label>
         </div>
         <div id="radius" class="input-group" style="display:none">
-          <label for="blurRadius">BlurRadius</label>
           <input type="number" id="blurRadius" value="10" style="width: 40px;" />
+          <label for="blurRadius">Blur Radius</label>
         </div>
         <div class="input-group">
           <input type="checkbox" id="useStats" style="top:4px;"/>
@@ -1426,12 +1476,22 @@
         <!-- Label Style -->
         <div class="input-group input-group-full">
           <select name="labelStyle" data-dojo-type="dijit/form/Select" id="labelStyle" style="width: 99%;">
-            <option value="PLAIN">Plain</option>
-            <option value="BOLD">Bold</option>
-            <option value="ITALIC">Italic</option>
-            <option value="BOLD ITALIC">Bold Italic</option>
+            <option value="normal">Normal</option>
+            <option value="italic">Italic</option>
+            <option value="oblique">Oblique</option>
           </select>
           <label for="labelStyle">Style</label>
+        </div>
+
+        <!-- Label Weight -->
+        <div class="input-group input-group-full">
+          <select name="labelWeight" data-dojo-type="dijit/form/Select" id="labelWeight" style="width: 99%;">
+            <option value="normal">Normal</option>
+            <option value="bold">Bold</option>
+            <option value="bolder">Bolder</option>
+            <option value="lighter">Lighter</option>
+          </select>
+          <label for="labelStyle">Weight</label>
         </div>
 
         <!-- Label Size -->
