@@ -1,0 +1,48 @@
+# IntelliJ IDEA
+.idea/
+
+# VS Code
+.vscode/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Logs
+logs
+*.log
+*.log.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Build output
+dist/
+build/
+out/
+coverage/
+tmp/
+temp/
+
+# Environment files
+.env
+.env.*
+
+# Test output
+coverage/
+.nyc_output/
+
+# Misc
+*.sublime-workspace
+*.sublime-project
+
+# Optional: lock files for other package managers
+pnpm-lock.yaml
+
+# Optional: local development files
+*.local

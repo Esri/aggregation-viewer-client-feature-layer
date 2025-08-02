@@ -108,6 +108,7 @@
       var _maxValue;
       var _ignoreChangeEvent = false;
       var _layerInfo;
+      var _binRendererProps = {};
       
       // ### Spatial Reference variables ###
       // These variables manage coordinate system transformations and spatial reference handling
@@ -254,16 +255,33 @@
       
       // ### Spatial Reference event handlers ###
       on(dijit.byId("spatialReferenceSelect"), "change", onSpatialReferenceChange);
-      
+
+      // ### Aggregation Renderer event handlers ###
+      on(dojo.byId("useAggregationRenderer"), "change", toggleUseAggregationRenderer);
+      on(dojo.byId("minColor"), "change", updateRendererFromUI);
+      on(dojo.byId("maxColor"), "change", updateRendererFromUI);
+      on(dojo.byId("minColorA"), "change", updateRendererFromUI);
+      on(dojo.byId("maxColorA"), "change", updateRendererFromUI);
+      on(dojo.byId("minOutlineColor"), "change", updateRendererFromUI);
+      on(dojo.byId("maxOutlineColor"), "change", updateRendererFromUI);
+      on(dojo.byId("minOutlineColorA"), "change", updateRendererFromUI);
+      on(dojo.byId("maxOutlineColorA"), "change", updateRendererFromUI);
+      on(dojo.byId("minOutlineWidth"), "change", updateRendererFromUI);
+      on(dojo.byId("maxOutlineWidth"), "change", updateRendererFromUI);
+      on(dojo.byId("minSize"), "change", updateRendererFromUI);
+      on(dojo.byId("maxSize"), "change", updateRendererFromUI);
+      on(dojo.byId("minValue"), "change", updateRendererFromUI);
+      on(dojo.byId("maxValue"), "change", updateRendererFromUI);
+      on(dojo.byId("classBreaksCount"), "change", updateRendererFromUI);
+
       // ### Aggregation Labels event handlers ###
-      on(dojo.byId("useAggregationRenderer"), "change", updateLayerLabelFromUIChange);
-      on(dojo.byId("renderLabels"), "change", updateLayerLabelFromUIChange);
-      on(dijit.byId("labelFont"), "change", updateLayerLabelFromUIChange);
-      on(dijit.byId("labelStyle"), "change", updateLayerLabelFromUIChange);
-      on(dijit.byId("labelWeight"), "change", updateLayerLabelFromUIChange);
-      on(dojo.byId("labelSize"), "change", updateLayerLabelFromUIChange);
-      on(dojo.byId("labelColor"), "change", updateLayerLabelFromUIChange);
-      on(dojo.byId("labelOpacity"), "change", updateLayerLabelFromUIChange);
+      on(dojo.byId("renderLabels"), "change", updateRendererFromUI);
+      on(dijit.byId("labelFont"), "change", updateRendererFromUI);
+      on(dijit.byId("labelStyle"), "change", updateRendererFromUI);
+      on(dijit.byId("labelWeight"), "change", updateRendererFromUI);
+      on(dojo.byId("labelSize"), "change", updateRendererFromUI);
+      on(dojo.byId("labelColor"), "change", updateRendererFromUI);
+      on(dojo.byId("labelOpacity"), "change", updateRendererFromUI);
       
       // ### LOD SR event handlers ###
       on(dijit.byId("lodSpatialReference"), "change", updateLayerFromUIChange);
@@ -275,11 +293,11 @@
       function setFeatureLayers() {
 
         // Remove existing feature layers
-        var aggregationsLayer = _map.getLayer("aggregations");
-        if (aggregationsLayer) {
-          _map.removeLayer(aggregationsLayer);
+        var aggregationLayer = _map.getLayer("aggregations");
+        if (aggregationLayer) {
+          _map.removeLayer(aggregationLayer);
         } else {
-          console.log("Aggregations layer not found.");
+          console.log("Aggregation layer not found.");
         }
 
         var heatmapLayer = _map.getLayer("heatmap");
@@ -289,8 +307,8 @@
           console.log("Heatmap layer not found.");
         }
 
-        var aggregationsLayer = addAggregationsLayer();
-        aggregationsLayer.on("load", function () {
+        var aggregationLayer = addAggregationsLayer();
+        aggregationLayer.on("load", function () {
           queryLayerTimeExtent();
           addHeatmapLayer();
           updateLayerFromUIChange(true);
@@ -609,7 +627,7 @@
           }
         };
         var infoTemplate = new InfoTemplate("Attributes", "${*}");
-        var aggregationsLayer = new FeatureLayer(featureCollection, {
+        var aggregationLayer = new FeatureLayer(featureCollection, {
           id: "aggregations",
           objectIdField: "objectid",
           showLabels: true,
@@ -618,21 +636,21 @@
         });
 
         // Create and set the bins renderer
-        var renderer = dojo.byId("useAggregationRenderer").checked === true ? createAggregationRenderer(10) : createClassBreakRenderer();
-        aggregationsLayer.setRenderer(renderer);
+        var renderer = dojo.byId("useAggregationRenderer").checked === true ? createAggregationRenderer() : createClassBreakRenderer();
+        aggregationLayer.setRenderer(renderer);
         
         // Create and set the bin labels (if renderLabels is checked)
         if (dojo.byId("renderLabels") && dojo.byId("renderLabels").checked === true) {
           var labelClass = createLabelClass();
-          aggregationsLayer.setLabelingInfo([labelClass]);
+          aggregationLayer.setLabelingInfo([labelClass]);
         }
         
-        _map.addLayer(aggregationsLayer);
-        console.log("Client Aggregations Layer added");
+        _map.addLayer(aggregationLayer);
+        console.log("Client Aggregation Layer added");
 
         getLayerInfo();
-        return aggregationsLayer
-      };
+        return aggregationLayer
+      }
 
       /**
        * Adds a heatmap layer to the map with a predefined feature collection and renderer
@@ -684,7 +702,7 @@
 
         _map.addLayer(heatmapLayer);
         console.log("Heatmap Layer added");
-      };
+      }
 
       /**
        * Queries the feature layer's time extent and sets the global _layerTimeExtent variable
@@ -704,19 +722,13 @@
           function (error) {
             console.log("Error getting the layers time extent: ", error.message);
           });
-      };
+      }
 
-      function createAggregationRenderer(classCount) {
-        console.log("Creating an aggregation renderer with " + classCount + " classes");
-        // Interpolates a value between min and max.
-        // ratio is a value between 0 and 1
-        // returns a value between min and max
-        function interpolate(ratio, min, max) {
-          if (max === min) return max;
-          return min + ratio * (max - min);
-        }
-        function createClassBreakInfo(min, max) {
+      function loadBinRendererProps() {
+        _binRendererProps.classBreaksCount = dojo.byId("classBreaksCount") ? dojo.byId("classBreaksCount").value : 10;
+        console.log("Creating an aggregation renderer with " + _binRendererProps.classBreaksCount + " class breaks");
 
+        // min and max fill color and opacity
         var minColorHex = dojo.byId("minColor") ? dojo.byId("minColor").value : "#000000";
         var maxColorHex = dojo.byId("maxColor") ? dojo.byId("maxColor").value : "#000000";
         var minColorA = dojo.byId("minColorA") ? parseFloat(dojo.byId("minColorA").value / 255) : 1.0;
@@ -727,32 +739,95 @@
         if (isNaN(maxColorA) || maxColorA < 0 || maxColorA > 1) {
           maxColorA = 1.0; // Default to fully opaque if invalid
         }
-        var minColor = hexToRgba(minColorHex, minColorA);
-        var maxColor = hexToRgba(maxColorHex, maxColorA);
+        _binRendererProps.minColor = hexToRgba(minColorHex, minColorA);
+        _binRendererProps.maxColor = hexToRgba(maxColorHex, maxColorA);
 
-          var fillColor = new Color([254, 240, 217, 0.7]);
-          var fillSymbol = new SimpleFillSymbol()
-          var outlineColor = new Color([99, 99, 99, 1]);
-          var outlineWidth = 0.3;
-          fillSymbol
-            .setStyle(SimpleFillSymbol.STYLE_SOLID)
-            .setColor(fillColor)
-            .setOutline(
-              new SimpleLineSymbol().setColor(outlineColor).setWidth(outlineWidth)
-            );
-            return {
-              minValue: min,
-              maxValue: max,
-              symbol: fillSymbol
-            };
+        // min and max outline color and opacity
+        var minOutlineColorHex = dojo.byId("minOutlineColor") ? dojo.byId("minOutlineColor").value : "#000000";
+        var maxOutlineColorHex = dojo.byId("maxOutlineColor") ? dojo.byId("maxOutlineColor").value : "#000000";
+        var minOutlineColorA = dojo.byId("minOutlineColorA") ? parseFloat(dojo.byId("minOutlineColorA").value / 255) : 1.0;
+        if (isNaN(minOutlineColorA) || minOutlineColorA < 0 || minOutlineColorA > 1) {
+          minOutlineColorA = 1.0; // Default to fully opaque if invalid
+        }
+        var maxOutlineColorA = dojo.byId("maxOutlineColorA") ? parseFloat(dojo.byId("maxOutlineColorA").value / 255) : 1.0;
+        if (isNaN(maxOutlineColorA) || maxOutlineColorA < 0 || maxOutlineColorA > 1) {
+          maxOutlineColorA = 1.0; // Default to fully opaque if invalid
+        }
+        _binRendererProps.minOutlineColor = hexToRgba(minOutlineColorHex, minOutlineColorA);
+        _binRendererProps.maxOutlineColor = hexToRgba(maxOutlineColorHex, maxOutlineColorA);
+
+        // min and max outline width
+        _binRendererProps.minOutlineWidth = dojo.byId("minOutlineWidth") ? parseFloat(dojo.byId("minOutlineWidth").value) : 0.5;
+        _binRendererProps.maxOutlineWidth = dojo.byId("maxOutlineWidth") ? parseFloat(dojo.byId("maxOutlineWidth").value) : 1.0;
+      }
+
+      // Interpolates a value between min and max.
+      // ratio is a value between 0 and 1
+      // returns a value between min and max
+      function interpolate(ratio, min, max) {
+        if (max === min) return max;
+        return min + ratio * (max - min);
+      }
+
+      function createClassBreakInfo(min, max) {
+        var ratio = max / 100;
+
+        // fill color and opacity
+        var fillR = interpolate(ratio, _binRendererProps.minColor[0], _binRendererProps.maxColor[0]);
+        var fillG = interpolate(ratio, _binRendererProps.minColor[1], _binRendererProps.maxColor[1]);
+        var fillB = interpolate(ratio, _binRendererProps.minColor[2], _binRendererProps.maxColor[2]);
+        var fillA = interpolate(ratio, _binRendererProps.minColor[3], _binRendererProps.maxColor[3]);
+        var fillColor = new Color([fillR, fillG, fillB, fillA]);
+        var fillSymbol = new SimpleFillSymbol()
+
+        // outline color and width
+        var outlineR = interpolate(ratio, _binRendererProps.minOutlineColor[0], _binRendererProps.maxOutlineColor[0]);
+        var outlineG = interpolate(ratio, _binRendererProps.minOutlineColor[1], _binRendererProps.maxOutlineColor[1]);
+        var outlineB = interpolate(ratio, _binRendererProps.minOutlineColor[2], _binRendererProps.maxOutlineColor[2]);
+        var outlineA = interpolate(ratio, _binRendererProps.minOutlineColor[3], _binRendererProps.maxOutlineColor[3]);
+        var outlineColor = new Color([outlineR, outlineG, outlineB, outlineA]);
+        var outlineWidth = interpolate(ratio, _binRendererProps.minOutlineWidth, _binRendererProps.maxOutlineWidth);
+        fillSymbol
+                .setStyle(SimpleFillSymbol.STYLE_SOLID)
+                .setColor(fillColor)
+                .setOutline(
+                        new SimpleLineSymbol().setColor(outlineColor).setWidth(outlineWidth)
+                );
+        return {
+          minValue: min,
+          maxValue: max,
+          symbol: fillSymbol
         };
-        function buildClassBreakInfos(classCount) {
-          var classBreakInfos = [];
-          for (var i = 0; i < classCount; i++) {
-            classBreakInfos.push(createClassBreakInfo(i * 10, (i + 1) * 10));
-          }
-          return classBreakInfos;
-        };
+      }
+
+      function buildAggregationRendererClassBreakInfos() {
+        loadBinRendererProps();
+        var classBreakInfos = [];
+        var classSize = 100 / _binRendererProps.classBreaksCount;
+        for (var i = 0; i < _binRendererProps.classBreaksCount; i++) {
+          classBreakInfos.push(createClassBreakInfo(i * classSize, (i + 1) * classSize));
+        }
+        return classBreakInfos;
+      }
+
+      function buildAggregationRendererClassBreakInfos_Simple() {
+        loadBinRendererProps();
+        var classBreakInfos = [];
+        classBreakInfos.push(createClassBreakInfo(0, 10));
+        classBreakInfos.push(createClassBreakInfo(10, 20));
+        classBreakInfos.push(createClassBreakInfo(20, 30));
+        classBreakInfos.push(createClassBreakInfo(30, 40));
+        classBreakInfos.push(createClassBreakInfo(40, 50));
+        classBreakInfos.push(createClassBreakInfo(50, 60));
+        classBreakInfos.push(createClassBreakInfo(60, 70));
+        classBreakInfos.push(createClassBreakInfo(70, 80));
+        classBreakInfos.push(createClassBreakInfo(80, 90));
+        classBreakInfos.push(createClassBreakInfo(90, 100));
+        return classBreakInfos;
+      }
+
+      function createAggregationRenderer() {
+        var classBreakInfos = buildAggregationRendererClassBreakInfos();
 
         // define breaks and color
         var renderer = new ClassBreaksRenderer({
@@ -760,25 +835,14 @@
           defaultSymbol: createClassBreakInfo(90, 100).symbol,
           normalizationType: "percent-of-total",
           normalizationTotal: 100,
-          classBreakInfos: [
-            createClassBreakInfo(0, 10),
-            createClassBreakInfo(10, 20),
-            createClassBreakInfo(20, 30),
-            createClassBreakInfo(30, 40),
-            createClassBreakInfo(40, 50),
-            createClassBreakInfo(50, 60),
-            createClassBreakInfo(60, 70),
-            createClassBreakInfo(70, 80),
-            createClassBreakInfo(80, 90),
-            createClassBreakInfo(90, 100)
-          ]
+          classBreakInfos: classBreakInfos
         });
 
-        return renderer;        
+        return renderer;
       }
 
       /**
-       * Creates a ClassBreaksRenderer for the aggregations layer
+       * Creates a ClassBreaksRenderer for the aggregation layer
        * This renderer defines different color breaks based on the "Weight" field
        * @returns {ClassBreaksRenderer} The created ClassBreaksRenderer instance
        */
@@ -1088,18 +1152,44 @@
         return url;
       }
 
-      /**
-       * Updates the layer label based on UI changes
-       * This function is called when label-related UI controls are changed
-       */
-      function updateLayerLabelFromUIChange() {
-        //TODO: only replace the layer's renderer instead of resetting the feature layers
-        setFeatureLayers();
-        updateLayerFromUIChange();
+      function toggleUseAggregationRenderer() {
+        if (dojo.byId("useAggregationRenderer").checked === true) {
+          dojo.byId("aggregationRendererControls").style.display = "block";
+        } else {
+          dojo.byId("aggregationRendererControls").style.display = "none";
+        }
+
+        updateRendererFromUI();
       }
 
       /**
-       * Updates the aggregations layer based on UI changes
+       * Updates the layer renderer and label based on UI changes
+       * This function is called when label-related UI controls are changed
+       */
+      function updateRendererFromUI() {
+        var aggregationLayer = _map.getLayer("aggregations");
+        if (!aggregationLayer) {
+          console.log("Aggregation layer not found.");
+          return;
+        }
+
+        // Create and set the bins renderer
+        var renderer = dojo.byId("useAggregationRenderer").checked === true ? createAggregationRenderer() : createClassBreakRenderer();
+        aggregationLayer.setRenderer(renderer);
+
+        // Create and set the bin labels (if renderLabels is checked)
+        if (dojo.byId("renderLabels") && dojo.byId("renderLabels").checked === true) {
+          var labelClass = createLabelClass();
+          aggregationLayer.setLabelingInfo([labelClass]);
+        } else {
+          aggregationLayer.setLabelingInfo([]);
+        }
+
+        aggregationLayer.refresh();
+      }
+
+      /**
+       * Updates the aggregation layer based on UI changes
        * This function is called when any UI control that affects the layer is changed
        * @param {boolean} setMapExtent - Whether to set the map extent after updating the layer
        */
@@ -1509,19 +1599,17 @@
         </div>
         <div class="input-group input-group-full input-group-checkbox-full">
           <label for="autoOffSet">Auto offset</label>
-          <input type="checkbox"
-           id="autoOffSet"
-           checked="true"
-           title="Auto Offset LOD based on the LOD type:
-GeoHash: 0
-Geotile: 5
-H3: 0
-Square: 5
-Flat Hexagon: 5
-Pointy Hexagon: 5
-Flat Triangle: 4
-Pointy Triangle: 4"/>
+          <input type="checkbox" id="autoOffSet" checked="true" title="Auto Offset LOD based on the LOD type:
+            GeoHash: 0
+            Geotile: 5
+            H3: 0
+            Square: 5
+            Flat Hexagon: 5
+            Pointy Hexagon: 5
+            Flat Triangle: 4
+            Pointy Triangle: 4"/>
         </div>
+      </div>
     </section>
 
     <!-- [Section 3] Aggregation Style -->
@@ -1577,7 +1665,6 @@ Pointy Triangle: 4"/>
     </section>
 
     <!-- [Section 4] Aggregation Bins Section -->
-    <section style="display: block;">
     <section id="aggBinsSection">
       <div class="config-header">
         <h2>Aggregation Bins</h2>
@@ -1586,46 +1673,54 @@ Pointy Triangle: 4"/>
           <a href="#" id="aggBinsToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
       </div>
+      <div id="aggregationRendererControls" style="display: none;">
+        <div class="config-content" style="padding-bottom: 0px;">
+          <div class="input-row input-row-header-labeled">
+            <label>Min</label>
+            <label>Max</label>
+          </div>
+          <div class="input-row input-row-header">
+            <label>Fill Color</label>
+            <input title="Min Fill Color" type="color" value="#ff0000" id="minColor" style="width: 20%;"/>
+            <input title="Max Fill Color" type="color" value="#ff0000" id="maxColor" style="width: 20%;"/>
+          </div>
+          <div class="input-row input-row-header" >
+            <label>Fill Opacity</label>
+            <input title="Min Fill Opacity" type="number" min="0" max="255" id="minColorA" value="0" style="width: 20%;"/>
+            <input title="Max Fill Opacity" type="number" min="0" max="255" id="maxColorA" value="255" style="width: 20%;"/>
+          </div>
+          <div class="input-row input-row-header" >
+            <label>Outline Color</label>
+            <input title="Min Outline Color" type="color" value="#000000" id="minOutlineColor" style="width: 20%;"/>
+            <input title="Max Outline Color" type="color" value="#000000" id="maxOutlineColor" style="width: 20%;"/>
+          </div>
+          <div class="input-row input-row-header" >
+            <label>Outline Opacity</label>
+            <input title="Min Outline Opacity" type="number" min="0" max="255" id="minOutlineColorA" value="100" style="width: 20%;"/>
+            <input title="Max Outline Opacity" type="number" min="0" max="255" id="maxOutlineColorA" value="100" style="width: 20%;"/>
+          </div>
+          <div class="input-row input-row-header" >
+            <label>Outline Width</label>
+            <input title="Min Outline Width" type="number" min="0" id="minOutlineWidth" value="0.5" style="width: 20%;"/>
+            <input title="Max Outline Width" type="number" min="0" id="maxOutlineWidth" value="0.5" style="width: 20%;"/>
+          </div>
+          <div class="input-row input-row-header" id="ovalAttrSection" style="display: none;" >
+            <label>Size</label>
+            <input title="Min Size in Precent" type="number" min="0" max="100" placeholder="min" id="minSize" value="100" style="width: 20%;"/>
+            <input title="Max Size in Precent" type="number" min="0" max="100" placeholder="max" id="maxSize" value="100" style="width: 20%;"/>
+          </div>
+          <div class="input-row input-row-header">
+            <label>Range</label>
+            <input title="Min Value. Leave empty to auto-calculate dynamically based on actual values in the current extent." type="number" id="minValue" value="" placeholder="min" style="width: 20%;"/>
+            <input title="Max Value. Leave empty to auto-calculate dynamically based on actual values in the current extent." type="number" id="maxValue" value="" placeholder="max" style="width: 20%;"/>
+          </div>
+          <div class="input-row input-row-header" style="justify-content: flex-start;">
+            <label for="classBreaksCount">Class Breaks</label>
+            <input type="number" id="classBreaksCount" value="10" min="2"/>
+          </div>
+        </div>
+      </div>
       <div class="config-content">
-        <div class="input-row input-row-header-labeled">
-          <label>Min</label>
-          <label>Max</label>
-        </div>
-        <div class="input-row input-row-header">
-          <label>Fill Color</label>
-          <input title="Min Fill Color" type="color" value="#ff0000" id="minColor" style="width: 20%;"/>
-          <input title="Max Fill Color" type="color" value="#ff0000" id="maxColor" style="width: 20%;"/>
-        </div>
-        <div class="input-row input-row-header" >
-          <label>Fill Opacity</label>
-          <input title="Min Fill Opacity" type="number" min="0" max="255" id="minColorA" value="0" style="width: 20%;"/>
-          <input title="Max Fill Opacity" type="number" min="0" max="255" id="maxColorA" value="255" style="width: 20%;"/>
-        </div>
-        <div class="input-row input-row-header" >
-          <label>Outline Color</label>
-          <input title="Min Outline Color" type="color" value="#000000" id="minOutlineColor" style="width: 20%;"/>
-          <input title="Max Outline Color" type="color" value="#000000" id="maxOutlineColor" style="width: 20%;"/>
-        </div>
-        <div class="input-row input-row-header" >
-          <label>Outline Opacity</label>
-          <input title="Min Outline Opacity" type="number" min="0" max="255" id="minOutlineColorA" value="100" style="width: 20%;"/>
-          <input title="Max Outline Opacity" type="number" min="0" max="255" id="maxOutlineColorA" value="100" style="width: 20%;"/>
-        </div>
-        <div class="input-row input-row-header" >
-          <label>Outline Width</label>
-          <input title="Min Outline Width" type="number" min="0" id="minOutlineWidth" value="0.5" style="width: 20%;"/>
-          <input title="Max Outline Width" type="number" min="0" id="maxOutlineWidth" value="0.5" style="width: 20%;"/>
-        </div>
-        <div class="input-row input-row-header" id="ovalAttrSection" style="display: none;" >
-          <label>Size</label>
-          <input title="Min Size in Precent" type="number" min="0" max="100" placeholder="min" id="minSize" value="100" style="width: 20%;"/>
-          <input title="Max Size in Precent" type="number" min="0" max="100" placeholder="max" id="maxSize" value="100" style="width: 20%;"/>
-        </div>
-        <div class="input-row input-row-header">
-          <label>Range</label>
-          <input title="Min Value. Leave empty to auto-calculate dynamically based on actual values in the current extent." type="number" id="minValue" value="" placeholder="min" style="width: 20%;"/>
-          <input title="Max Value. Leave empty to auto-calculate dynamically based on actual values in the current extent." type="number" id="maxValue" value="" placeholder="max" style="width: 20%;"/>
-        </div>
         <div class="input-row input-row-header" style="justify-content: flex-start;">
           <label for="heatmap">Heatmap</label>
           <input type="checkbox" id="heatmap" />
@@ -1739,8 +1834,8 @@ Pointy Triangle: 4"/>
         <!-- Label Opacity -->
         <div class="input-group">
           <!--input type="number" min="0" max="255" id="labelColorA" value="255" style="width: 60px;"/-->
-          <input type="range" id="labelOpacity" min="0" max="1" step="0.02" value="1" style="width: 100px;" /-->
-          <label for="labelColorA">Opacity</label>
+          <input type="range" id="labelOpacity" min="0" max="1" step="0.02" value="1" style="width: 100px;" />
+          <label for="labelOpacity">Opacity</label>
         </div>
 
       </div>
