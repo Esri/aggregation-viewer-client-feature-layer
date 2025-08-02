@@ -62,16 +62,6 @@ body {
     cursor: pointer;
 }
 
-.collapser {
-    position: absolute;
-    width: 2.7rem;
-    height: 2.7rem;
-    right: 300px;
-    font-size: 2.7rem;
-    background: #FAFAFA;
-    cursor: pointer;
-}
-
 .panel-collapsed .collapser {
   right: 0;
 }
@@ -221,7 +211,11 @@ section:first-of-type .config-header {
 }
 
 .input-group-full input {
-    width: calc(100% - 85px) !important;
+    width: calc(100% - 85px);
+}
+
+.input-group-checkbox-full {
+  flex-direction: row;  
 }
 
 .input-group-full label {
@@ -233,7 +227,9 @@ section:first-of-type .config-header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
+  align-items: center;
   width: 100%;
+  margin: 5px 0;
 }
 
 .input-row .input-group {
@@ -242,6 +238,51 @@ section:first-of-type .config-header {
 
 .input-row .input-group label {
     height: 1rem;
+}
+
+.input-row-header-labeled {
+    margin-left: 90px;
+    justify-content: space-around;
+}
+
+.input-row-header {
+  margin: 2px 0;
+}
+
+.input-row-header label {
+    width: 95px;
+}
+
+.input-row .input-group {
+    width: 33%;
+}
+
+.input-row .input-group label {
+    height: 1rem;
+}
+
+.input-row-header-labeled {
+    margin-left: 90px;
+    justify-content: space-around;
+}
+
+.input-row-header {
+  margin: 2px 0;
+}
+
+.input-row-header label {
+    width: 95px;
+}
+
+.input-row-header input,
+.input-row-header select,
+.input-row-header .dijitSelect {
+    flex: 1 0 auto;
+    margin: 1px 2px;
+}
+
+.input-row-header input[type="checkbox"] {
+    flex: 0 0 auto;
 }
 
 #inputUrl {
