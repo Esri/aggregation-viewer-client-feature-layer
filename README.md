@@ -2,22 +2,6 @@
 
 Sample JavaScript Feature and Map Service Layer Aggregation Viewer, using aggregation (lod) queries against Feature or Map Service Layers, aggregating features server side, returning aggregated bins (polygon features) and rendering those aggregation bins client side.
 
-Client side rendering based on server side Flat Hexagon aggregation:
-
-![App](client-flat-hexagon.png?raw=true)
-
-Client side rendering based on server side Square aggregation:
-
-![alt text](client-square.png?raw=true)
-
-Client side rendering based on server side Flat Triangle aggregation:
-
-![alt text](client-flat-triangle.png?raw=true)
-
-Client side Heat Map rendering based on server side Flat Hexagon aggregation:
-
-![alt text](client-flat-hexagon-heat-map.png?raw=true)
-
 ## Description
 
 The **aggregation-viewer-client-feature-layer** is a web-based Viewer sample application that performs spatial aggregation of large datasets on the server side and renders the results as interactive visualizations on the client side. The application demonstrates server-side Feature Layer or Map Service Layer spatial aggregation query into polygon bins with client-side rendering using the ArcGIS JavaScript API.
@@ -51,13 +35,11 @@ python -m http.server 8000
 
 # Open browser to http://localhost:8000
 ```
-
-## Documentation
+### Documentation
 
 - **[INSTALL.md](INSTALL.md)** - Complete installation and deployment guide
 - **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development environment setup and coding guidelines
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
-
 
 ### Key Features
 - Uses ArcGIS JavaScript API 3.46 with Dojo framework
@@ -65,7 +47,6 @@ python -m http.server 8000
 - Renders results client-side as either polygon graphics or heatmap visualization
 - Supports live updates, manual refresh, or time-based replay modes
 - The project essentially moves heavy spatial aggregation processing to the server while keeping the visualization and interaction on the client side for better performance with large datasets.
-
 - Server-side aggregation: Queries feature/map service layers with aggregation (LOD) parameters to get pre-aggregated spatial bins
 - Multiple aggregation types: Supports GeoHash, GeoTile, H3, Square, Hexagon (flat/pointy), and Triangle (flat/pointy) aggregation patterns
 - Flexible rendering: Can display aggregated polygons or heatmaps based on the aggregated data
@@ -98,6 +79,43 @@ python -m http.server 8000
 - **Statistical analysis** - Field-based weighting, count aggregation, and custom statistics
 - **Temporal controls** - Manual, live update, and replay modes with time slider support
 
+## Examples
+
+Client side rendering based on server side Flat Hexagon aggregation:
+
+![App](client-flat-hexagon.png?raw=true)
+
+Client side rendering based on server side Square aggregation:
+
+![alt text](client-square.png?raw=true)
+
+Client side rendering based on server side Flat Triangle aggregation:
+
+![alt text](client-flat-triangle.png?raw=true)
+
+Client side Heat Map rendering based on server side Flat Hexagon aggregation:
+
+![alt text](client-flat-hexagon-heat-map.png?raw=true)
+
+## Configuration Options
+
+### Aggregation Settings
+- **LOD Levels** - With auto-offset calculations per aggregation type
+- **Auto Offset Values** - GeoHash: 0, GeoTile/Square/Hexagon: +5, Triangle: +4, H3: 0
+- **Sub-types** - Shape (full geometry) vs Centroid (point representation)
+- **Custom LOD Spatial Reference** - Allows the user to choose the spatial reference index to use for the LOD aggregation bins, rather than using the map's spatial reference.
+
+### Basemap Options
+- **ESRI Online Services** - Topographic, Streets, Imagery, Terrain, Ocean
+- **Specialized Maps** - National Geographic, Navigation Charts, Transportation
+- **USGS Services** - National Map, Imagery, Hydro, Topo maps
+- **Canvas Styles** - Light/Dark Gray for minimal distraction
+
+### Statistical Analysis
+- **Weight Fields** - Custom field selection for aggregation weighting
+- **Statistical Types** - Count, Sum, Average, Min, Max operations
+- **Normalization** - Dynamic range calculation for optimal visualization
+
 ## Technical Architecture
 
 ### Core JavaScript Modules
@@ -120,25 +138,6 @@ python -m http.server 8000
 - **Lazy loading** - Time slider initialization on demand
 - **Extent-based filtering** - Spatial queries filtered to the current map extent view
 - **Renderer caching** - Reuses renderers with updated normalization values
-
-## Configuration Options
-
-### Aggregation Settings
-- **LOD Levels** - With auto-offset calculations per aggregation type
-- **Auto Offset Values** - GeoHash: 0, GeoTile/Square/Hexagon: +5, Triangle: +4, H3: 0
-- **Sub-types** - Shape (full geometry) vs Centroid (point representation)
-- **Custom LOD Spatial Reference** - Allows the user to choose the spatial reference index to use for the LOD aggregation bins, rather than using the map's spatial reference.
-
-### Basemap Options
-- **ESRI Online Services** - Topographic, Streets, Imagery, Terrain, Ocean
-- **Specialized Maps** - National Geographic, Navigation Charts, Transportation
-- **USGS Services** - National Map, Imagery, Hydro, Topo maps
-- **Canvas Styles** - Light/Dark Gray for minimal distraction
-
-### Statistical Analysis
-- **Weight Fields** - Custom field selection for aggregation weighting
-- **Statistical Types** - Count, Sum, Average, Min, Max operations
-- **Normalization** - Dynamic range calculation for optimal visualization
 
 ## File Structure and Dependencies
 
@@ -177,7 +176,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-   http://www.apache.org/licenses/LICENSE-2.0
+http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
