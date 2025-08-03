@@ -191,9 +191,11 @@
         dom.byId("currentMapSR").value = _wkid;
       }
 
-      // ### Issue new query on extent-change if live mode is disabled ###
-      // Note: This event handler will be re-attached when map is rebuilt
-      function attachMapExtentChangeHandler() {
+      /**
+       * Issue new query on extent-change if live mode is disabled ###
+       * Note: This event handler will be re-attached when map is rebuilt
+       */
+       function attachMapExtentChangeHandler() {
         _map.on("extent-change", function (evt) {
           if (_map.getLayer("aggregations") && !_ignoreChangeEvent && !_live) {
             updateLayerFromUIChange();
@@ -205,9 +207,13 @@
       // UI Related functions
       //#############################################################################################
 
-      // ### UI event listener ###
-      
-      // ### DRY: Reusable section toggle function ###
+      /*
+       * DRY: Reusable section toggle function
+       * This function creates a toggle handler for a section based on its ID and visibility state
+       * @param {string} sectionId - The ID of the section to toggle
+       * @param {string} toggleId - The ID of the toggle button
+       * @param {Object} visibilityVar - An object to track the visibility state of the section
+       */
       function createSectionToggle(sectionId, toggleId, visibilityVar) {
         return function () {
           // toggle section visibility
@@ -231,6 +237,10 @@
       var spatialReferenceVisibility = { value: true };
       var lodSRVisibility = { value: true };
       var aggLabelsVisibility = { value: true };
+
+      //#############################################################################################
+      // ### UI Event Listeners ###
+      //#############################################################################################
 
       // ### Section toggle event handlers ###
       on(dojo.byId("layersToggle"), "click", createSectionToggle("layersSection", "layersToggle", layersVisibility));
@@ -289,7 +299,27 @@
 
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
 
+      /**
+       * Shows a tooltip with the current value of the input field
+       * This function is called when the mouse enters the input field
+       */
+      on(dom.byId("inputUrl"), "mouseenter", function() {
+        this.title = this.value || "No value entered";
+      });
 
+      /**
+       * Clears the tooltip when the mouse leaves the input field
+       * This function is called when the mouse leaves the input field
+       */
+      on(dom.byId("inputUrl"), "mouseleave", function() {
+        this.title = "";
+      });
+
+
+      /**
+       * Updates the feature layers based on the current UI settings
+       * This function is called when the user clicks the "Set Layer" button
+       */
       function setFeatureLayers() {
 
         // Remove existing feature layers
@@ -315,12 +345,20 @@
         });
       }
 
+      /**
+       * Toggles the visibility of the panel by adding or removing a CSS class
+       * This function is used to collapse or expand the panel
+       */
       function togglePanel() {
         domClass.toggle(document.getElementsByTagName("body")[0], "panel-collapsed");
       }
 
       // ### Switch change functions ###
 
+      /*
+       * Toggles the map interaction mode between manual, live, and replay
+       * This function is called when the mode switch is changed
+       */
       function toggleMode(evt) {
         //console.log(evt.target.value);
         if (evt.target.value === "manual") {
@@ -351,6 +389,10 @@
         }
       }
 
+      /**
+       * Toggles the heatmap layer on and off
+       * This function is called when the heatmap toggle is changed
+       */
       function toggleHeatmap(evt) {
         if (dojo.byId("heatmap").checked === true) {
           dojo.byId("radius").style.display = "inherit";
@@ -371,12 +413,20 @@
         updateLayerFromUIChange();
       }
 
+      /**
+       * Toggles the refresh of the layer
+       * This function is called when the refresh toggle is changed
+       */
       function toggleRefresh(evt) {
         if (!_live) {
           updateLayerFromUIChange();
         }
       }
 
+      /**
+       * Toggles the use of the aggregation renderer
+       * This function is called when the useAggregationRenderer toggle is changed
+       */
       function toggleStats(evt) {
         if (evt.target.id === "useStats") {
           if (dojo.byId("useStats").checked === true) {
@@ -390,6 +440,10 @@
         }
       }
 
+      /**
+       * Handles changes to the selected statistical field
+       * This function is called when the statistical field dropdown is changed
+       */
       function statFieldChanged(val) {
         var control = dijit.byId('statField');
         var selectedOption = control.getOptions(val);
@@ -397,7 +451,10 @@
         updateLayerFromUIChange();
       }
 
+      //#############################################################################################
       // ### Spatial Reference Functions ###
+      //#############################################################################################
+
       /**
        * Handles spatial reference system changes from the dropdown
        * Updates global variables and re-projects map if necessary
@@ -449,7 +506,10 @@
       }
 
 
+      //#############################################################################################      
       // ### Aggregation Labels Functions ###
+      //#############################################################################################
+
       /**
        * Toggles the visibility of aggregation labels and their control panel
        * @param {Event} evt - The change event from the checkbox
@@ -466,6 +526,10 @@
         }
       }
 
+      /**
+       * Populates the statistical type select options based on the selected field
+       * @param {Object} selectedOption - The selected field option
+       */
       function populateStatTypeSelectOptions(selectedOption) {
         var statTypeSelect = dijit.byId("statType");
         var prevStatType = statTypeSelect.value;
@@ -547,6 +611,11 @@
         }
       }
 
+      /**
+       * Populates the select element with layer fields
+       * @param {Object} select - The select element to populate
+       * @param {boolean} numericOnly - Whether to include only numeric fields
+       */
       function populateSelectWithLayerFields(select, numericOnly) {
         // clear exiting options
         var i;
@@ -568,7 +637,11 @@
         }
       }
 
-      // field type can be one of the following: "esriFieldTypeSmallInteger", "esriFieldTypeInteger", "esriFieldTypeSingle", "esriFieldTypeDouble", "esriFieldTypeString", "esriFieldTypeDate", "esriFieldTypeOID", "esriFieldTypeGeometry", "esriFieldTypeBlob", "esriFieldTypeRaster", "esriFieldTypeGUID", "esriFieldTypeGlobalID", "esriFieldTypeXML"
+      /**
+       * Checks if the field is numeric
+       * @param {Object} field - The field object to check
+       * @returns {boolean} True if the field is numeric, false otherwise
+       */
       function isFieldNumeric(field) {
           if (!field || !field.type)
             return false;
@@ -576,12 +649,18 @@
           return (field.type === "esriFieldTypeSmallInteger" || field.type === "esriFieldTypeInteger" || field.type === "esriFieldTypeSingle" || field.type === "esriFieldTypeDouble" || field.type === "esriFieldTypeOID");
       }
 
+      /**
+       * Checks if the field is supported for statistical operations
+       * @param {Object} field - The field object to check
+       * @returns {boolean} True if the field is supported, false otherwise
+       */
       function isSupportedStatField(field) {
           if (!field || !field.type)
             return false;
 
           return (field.type !== "esriFieldTypeGeometry" && field.type !== "esriFieldTypeBlob" && field.type !== "esriFieldTypeRaster");
       }
+
 
       //#############################################################################################
       // Layer related functions
@@ -724,6 +803,11 @@
           });
       }
 
+      /**
+       * Loads the properties for the bin renderer from the UI inputs
+       * This function reads values from the input fields and sets them in the _binRendererProps object
+       * It is called when the aggregation renderer is used or when the properties need to be
+       */
       function loadBinRendererProps() {
         _binRendererProps.classBreaksCount = dojo.byId("classBreaksCount") ? dojo.byId("classBreaksCount").value : 10;
         console.log("Creating an aggregation renderer with " + _binRendererProps.classBreaksCount + " class breaks");
@@ -761,14 +845,24 @@
         _binRendererProps.maxOutlineWidth = dojo.byId("maxOutlineWidth") ? parseFloat(dojo.byId("maxOutlineWidth").value) : 1.0;
       }
 
-      // Interpolates a value between min and max.
-      // ratio is a value between 0 and 1
-      // returns a value between min and max
+      /**
+       * Interpolates a value between min and max.
+       * @param {number} ratio - A value between 0 and 1
+       * @param {number} min - The minimum value
+       * @param {number} max - The maximum value
+       * @returns {number} A value between min and max
+       */
       function interpolate(ratio, min, max) {
         if (max === min) return max;
         return min + ratio * (max - min);
       }
 
+      /**
+       * Creates class break information for the renderer.
+       * @param {number} min - The minimum value for the class break
+       * @param {number} max - The maximum value for the class break
+       * @returns {Object} An object containing the class break information
+       */
       function createClassBreakInfo(min, max) {
         var ratio = max / 100;
 
@@ -800,6 +894,11 @@
         };
       }
 
+      /**
+       * Builds class break infos for the aggregation renderer based on the bin renderer properties
+       * This function creates an array of class break infos with interpolated colors and sizes
+       * @returns {Array} An array of class break info objects
+       */
       function buildAggregationRendererClassBreakInfos() {
         loadBinRendererProps();
         var classBreakInfos = [];
@@ -810,6 +909,14 @@
         return classBreakInfos;
       }
 
+      /**
+       * Builds class break infos for a simple aggregation renderer with fixed breaks
+       * This function creates an array of class break infos with predefined ranges
+       * This is used for the simple aggregation renderer example
+       * It creates fixed class breaks for demonstration purposes
+       * It does not use the bin renderer properties
+       * @returns {Array} An array of class break info objects
+       */
       function buildAggregationRendererClassBreakInfos_Simple() {
         loadBinRendererProps();
         var classBreakInfos = [];
@@ -826,6 +933,11 @@
         return classBreakInfos;
       }
 
+      /**
+       * Creates a ClassBreaksRenderer for the aggregation layer
+       * This renderer defines different color breaks based on the "Weight" field
+       * @returns {ClassBreaksRenderer} The created ClassBreaksRenderer instance
+       */
       function createAggregationRenderer() {
         var classBreakInfos = buildAggregationRendererClassBreakInfos();
 
@@ -1009,7 +1121,9 @@
         return labelClass;
       }
 
+      // ###############################################################################################
       // ### Utility Functions ###
+      // ###############################################################################################
 
       /**
        * Converts label style string to a valid font style
@@ -1152,6 +1266,9 @@
         return url;
       }
 
+      /**
+       * Toggles the visibility of the aggregation renderer controls
+       */
       function toggleUseAggregationRenderer() {
         if (dojo.byId("useAggregationRenderer").checked === true) {
           dojo.byId("aggregationRendererControls").style.display = "block";
@@ -1251,16 +1368,16 @@
       /**
        * Processes projected features and updates the layers with graphics
        * This function is called after geometries are projected to the map's spatial reference
+       * This function creates graphics from the projected geometries and updates the layers with them
+       * It also calculates weights based on the selected statistics field and type
+       * If heatmap is enabled, it uses the centroid of the geometry
+       * If statistics are used, it retrieves the weight from the feature attributes
+       * If not, it uses the "Count" attribute as the weight
        * @param {Array} features - The array of features to process
        * @param {Array} projectedGeometries - The array of projected geometries corresponding to the features
        * @param {Array} weightsArray - The array to store weights for each feature
        * @param {boolean} setMapExtent - Whether to set the map extent after updating the layer
        */
-      // This function creates graphics from the projected geometries and updates the layers with them
-      // It also calculates weights based on the selected statistics field and type
-      // If heatmap is enabled, it uses the centroid of the geometry
-      // If statistics are used, it retrieves the weight from the feature attributes
-      // If not, it uses the "Count" attribute as the weight
       function processProjectedFeatures(features, projectedGeometries, weightsArray, setMapExtent) {
         features = Array.isArray(features) ? features : [];
 
@@ -1327,13 +1444,13 @@
       /**
        * Updates the aggregations and heatmap layers with the provided graphics
        * This function is called after querying the feature layer and processing the features
+       * This function updates the selected layer (heatmap or aggregations) with the new graphics
+       * It also adjusts the renderer based on the selected layer and updates the map extent if needed
+       * If the heatmap layer is selected, it sets the blur radius from the UI control
        * @param {Array} graphics - The array of graphics to update the layers with
        * @param {Array} weightsArray - The array of weights corresponding to the graphics
        * @param {boolean} setMapExtent - Whether to set the map extent after updating the layer
        */
-      // This function updates the selected layer (heatmap or aggregations) with the new graphics
-      // It also adjusts the renderer based on the selected layer and updates the map extent if needed
-      // If the heatmap layer is selected, it sets the blur radius from the UI control
       function updateLayersWithGraphics(graphics, weightsArray, setMapExtent) {
         var aggregationsLayer = _map.getLayer("aggregations");
         var heatmapLayer = _map.getLayer("heatmap");
@@ -1370,11 +1487,9 @@
           });
       }
 
-
       //#############################################################################################
-      //Other Functions
+      // Other Functions
       //#############################################################################################
-      //
 
       /**
        * Initializes (init & update including labels) the time slider for the map
@@ -1400,6 +1515,9 @@
         timeSlider.setLabels(labels);
       }
 
+      /**
+       * Updates the time slider based on the current layer time extent
+       */
       function updateTimeSlider() {
         queryLayerTimeExtent();
         setTimeout(function () {
@@ -1416,7 +1534,12 @@
         }, 1000);
       }
 
-      // time slider labels
+      /**
+       * Creates labels for the time slider based on the time stops
+       * This function generates labels for every other time stop in the time slider
+       * It formats the date and time for display
+       * @returns {Array} An array of formatted labels for the time slider
+       */
       function createLabels() {
         var labels = array.map(timeSlider.timeStops, function (timeStop, i) {
           if (i % 2 === 0) {
@@ -1446,6 +1569,11 @@
         return labels;
       }
 
+      /**
+       * Starts the auto-update process for the layer
+       * This function sets a timeout to update the layer every 2 seconds
+       * It checks if the live mode is enabled before continuing
+       */
       function autoUpdate() {
         setTimeout(function () {
           updateLayerFromUIChange();
@@ -1455,13 +1583,11 @@
         }, 2000);
       }
 
-      on(dom.byId("inputUrl"), "mouseenter", function() {
-        this.title = this.value || "No value entered";
-      });
-      on(dom.byId("inputUrl"), "mouseleave", function() {
-        this.title = "";
-      });
-
+      /**
+       * Handles the change event for the basemap dropdown
+       * This function updates the map's basemap layer based on the selected URL from the dropdown
+       * It removes the existing basemap layer if it exists and adds a new one
+       */
       function onSelectedBasemapChanged() {
         // Get the selected basemap URL from the dropdown
         var basemapUrl = dom.byId("basemapUrl").value;
@@ -1492,6 +1618,12 @@
         console.log("Basemap updated to: " + basemapUrl);
       }
 
+
+      //#############################################################################################
+      // Initialization
+      //#############################################################################################
+
+      // Initialize the map and layers when the DOM is ready
       require(["dojo/domReady!"], function() {
         var basemapDropdown = dom.byId("basemapUrl");
         if (basemapDropdown) {
