@@ -1633,6 +1633,11 @@
           console.warn("Element with ID 'basemapUrl' not found in the DOM.");
         }
       });
+
+      on(dojo.byId("labelOpacity"), "input", function() {
+        var slider = dojo.byId("labelOpacity");
+        slider.title = Math.round(slider.value * 255);
+      });
     });
   </script>
 </head>
