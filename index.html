@@ -186,9 +186,6 @@
 
         // only the first map built is tiled
         _isBasemapTiled = false;
-
-        // Update current map SR display
-        dom.byId("currentMapSR").value = _wkid;
       }
 
       /**
@@ -486,7 +483,6 @@
           if (result.length) {
             var newMapExtent = result[0];
             buildMap(newMapExtent); // Rebuild the map with the new extent
-            dom.byId("currentMapSR").value = _wkid;
           } else {
             console.log("Projection was successful, but no results were returned.");
           }
@@ -501,7 +497,6 @@
             "spatialReference": { "wkid": wkid }
           });
           buildMap(defaultExtent);
-          dom.byId("currentMapSR").value = _wkid;
         });
       }
 
@@ -1711,12 +1706,6 @@
             <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
           </select>
           <label for="spatialReferenceSelect">Spatial Reference</label>
-        </div>
-
-        <!-- Current Map SR -->
-        <div class="input-group input-group-full">
-          <input type="text" id="currentMapSR" value="102100" readonly />
-          <label for="currentMapSR">Current</label>
         </div>
       </div>
     </section>
