@@ -108,6 +108,7 @@
       let _maxValue;
       let _ignoreChangeEvent = false;
       let _layerInfo;
+      let _timeSlider;
       const _binRendererProps = {};
       
       // ### Spatial Reference variables ###
@@ -1482,40 +1483,39 @@
        * Initializes (init & update including labels) the time slider for the map
        */
       function initTimeSlider() {
-        const timeSlider = new TimeSlider({
+        _timeSlider = new TimeSlider({
           style: "width: 100%;"
         }, dom.byId("timeSlider"));
-        _map.setTimeSlider(timeSlider);
-        timeSlider.setThumbCount(2);
-        timeSlider.createTimeStopsByCount(_layerTimeExtent, 21);
-        timeSlider.setThumbIndexes([0, 21]);
-        timeSlider.setThumbMovingRate(2000);
-        timeSlider.startup();
-        timeSlider.on("time-extent-change", function () {
+        _map.setTimeSlider(_timeSlider);
+        _timeSlider.setThumbCount(2);
+        _timeSlider.createTimeStopsByCount(_layerTimeExtent, 21);
+        _timeSlider.setThumbIndexes([0, 21]);
+        _timeSlider.setThumbMovingRate(2000);
+        _timeSlider.startup();
+        _timeSlider.on("time-extent-change", function () {
           if (!_ignoreChangeEvent) {
-            _layerTimeExtent = timeSlider.getCurrentTimeExtent();
+            _layerTimeExtent = _timeSlider.getCurrentTimeExtent();
             updateLayerFromUIChange();
           };
         });
         // add labels for every other time stop
         const labels = createLabels();
-        timeSlider.setLabels(labels);
+        _timeSlider.setLabels(labels);
       }
 
       /**
        * Updates the time slider based on the current layer time extent
-       * TODO: Fix this function
        */
       function updateTimeSlider() {
         queryLayerTimeExtent();
         setTimeout(function () {
-          timeSlider.createTimeStopsByCount(_layerTimeExtent, 21);
-          timeSlider.setThumbIndexes([0, 21]);
-          timeSlider.startup();
-          _map.setTimeSlider(timeSlider);
+          _timeSlider.createTimeStopsByCount(_layerTimeExtent, 21);
+          _timeSlider.setThumbIndexes([0, 21]);
+          _timeSlider.startup();
+          _map.setTimeSlider(_timeSlider);
           // add labels for every other time stop
           const labels = createLabels();
-          timeSlider.setLabels(labels);
+          _timeSlider.setLabels(labels);
           domStyle.set(dom.byId('timeSlider'), "display", 'block');
           updateLayerFromUIChange();
           _ignoreChangeEvent = false;
@@ -1526,26 +1526,29 @@
        * Creates labels for the time slider based on the time stops
        * This function generates labels for every other time stop in the time slider
        * It formats the date and time for display
-       * TODO: Fix this fn
        * @returns {Array} An array of formatted labels for the time slider
        */
       function createLabels() {
-        const labels = array.map(timeSlider.timeStops, function (timeStop, i) {
+        const labels = array.map(_timeSlider.timeStops, function (timeStop, i) {
+          let hours;
+          let minutes;
+          let seconds;
+
           if (i % 2 === 0) {
             if (timeStop.getHours() < 10) {
-              const hours = "0" + timeStop.getHours();
+              hours = "0" + timeStop.getHours();
             } else {
-              const hours = timeStop.getHours();
+              hours = timeStop.getHours();
             };
             if (timeStop.getMinutes() < 10) {
-              const minutes = "0" + timeStop.getMinutes();
+              minutes = "0" + timeStop.getMinutes();
             } else {
-              const minutes = timeStop.getMinutes();
+              minutes = timeStop.getMinutes();
             };
             if (timeStop.getSeconds() < 10) {
-              const seconds = "0" + timeStop.getSeconds();
+              seconds = "0" + timeStop.getSeconds();
             } else {
-              const seconds = timeStop.getSeconds();
+              seconds = timeStop.getSeconds();
             };
             const month = timeStop.getMonth() + 1;
             const day = timeStop.getDate();
