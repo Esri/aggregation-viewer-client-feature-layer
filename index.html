@@ -1221,8 +1221,8 @@
         }
 
         var lod = dojo.byId("lod").value;
-        var lodSubType = dojo.byId("aggSubStyle").value;
         var lodType = dojo.byId("aggStyle").value;
+        var lodGeometryAggregationType = dojo.byId("aggSubStyle").value;
         if (dojo.byId("autoOffSet").checked === true) {
           if (lodType === "flatHexagon" || lodType === "pointyHexagon" || lodType === "square" || lodType === 'geotile') {
             lod = (parseInt(lod) + 5).toString();
@@ -1236,7 +1236,8 @@
         // Build the query URL
         var url = dojo.byId("inputUrl").value;
         var outSR = _currentMapSR;
-        url += "/query?lod=" + lod + "&lodType=" + lodType + "&lodSubType=" + lodSubType + "&outSR=" + outSR;
+        url += "/query?lod=" + lod + "&lodType=" + lodType + "&outSR=" + outSR;
+        url += "&lodGeometryAggregationType=" + lodGeometryAggregationType;
         if (dojo.byId("useLodSR") && dojo.byId("useLodSR").checked === true) {
           var lodSR = dijit.byId("lodSpatialReference").value;
           url += "&lodSR=" + lodSR;
@@ -1667,7 +1668,7 @@
         </div>
 
         <!-- Select Basemap -->
-        <div class="input-group input-group-full">
+        <div title="Select Base Map" class="input-group input-group-full">
           <select id="basemapUrl" name="basemapUrl" style="width: 120px;">
             <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer">Topographic</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer">Streets</option>
@@ -1689,11 +1690,11 @@
             <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer">USGS Imagery with Labels</option>
             <option value="https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer">USGS Hydro</option>
           </select>
-          <label for="basemapUrl">Basemap</label>
+          <label for="basemapUrl">BaseMap</label>
         </div>
 
         <!-- Select Map SR -->
-        <div class="input-group input-group-full">
+        <div title="Select Map Spatial Reference" class="input-group input-group-full">
           <select name="spatialReferenceSelect" data-dojo-type="dijit/form/Select" id="spatialReferenceSelect" style="width: 200px;">
             <option value="102003">102003 (Albers)</option>
             <option value="102100" selected="selected">102100 (Web Mercator)</option>
@@ -1710,13 +1711,13 @@
             <option value="3363">3363 (NAD_1983_HARN_StatePlane_Pennsylvania_North_FIPS_3701_Feet)</option>
             <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
           </select>
-          <label for="spatialReferenceSelect">Spatial Reference</label>
+          <label for="spatialReferenceSelect">Map SR</label>
         </div>
 
         <!-- Current Map SR -->
-        <div class="input-group input-group-full">
+        <div title="Current Map Spatial Reference" class="input-group input-group-full">
           <input type="text" id="currentMapSR" value="102100" readonly />
-          <label for="currentMapSR">Current</label>
+          <label for="currentMapSR">Current SR</label>
         </div>
       </div>
     </section>
@@ -1752,7 +1753,7 @@
           <a href="#" id="aggStyleToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
       </div>
-      <div class="config-content" style="padding-bottom: 5px;">
+      <div title="LOD Aggregation Type" class="config-content" style="padding-bottom: 5px;">
         <div class="input-group input-group-full">
           <select name="aggStyle" id="aggStyle" style="width: 120px;">
             <option value="geohash" selected="selected">GeoHash</option>
@@ -1766,15 +1767,15 @@
           </select>
           <label for="aggStyle">LOD Type</label>
         </div>
-        <div class="input-group input-group-full">
+        <div title="LOD Geometry Aggregation Type" class="input-group input-group-full">
           <select name="aggSubStyle" id="aggSubStyle" style="width: 120px;">
-            <option value="shape">Shape</option>
             <option value="centroid" selected="selected">Centroid</option>
+            <option value="shape">Shape</option>
           </select>
-          <label for="aggSubStyle">LOD SubType</label>
+          <label for="aggSubStyle">Geometry</label>
         </div>
       </div>
-      <div class="config-content" style="padding-top: 0;">
+      <div title="Leave unchecked to auto select the LOD Spatial Reference" class="config-content" style="padding-top: 0;">
         <label for="useLodSR">LOD SR</label>
         <input type="checkbox" id="useLodSR" />
         <select name="lodSpatialReference" data-dojo-type="dijit/form/Select" id="lodSpatialReference" style="width: 200px;">
