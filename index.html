@@ -250,7 +250,7 @@
       on(dojo.byId("heatmap"), "change", toggleHeatmap);
       on(dojo.byId("refreshMode"), "change", toggleMode);
       on(dojo.byId("autoOffSet"), "change", toggleRefresh);
-      on(dojo.byId("aggStyle"), "change", toggleRefresh);
+      on(dojo.byId("lodType"), "change", toggleRefresh);
       on(dojo.byId("lodGeometryAggregationType"), "change", toggleRefresh);
       on(dojo.byId("lod"), "change", toggleRefresh);
       on(dojo.byId("blurRadius"), "change", toggleRefresh);
@@ -290,7 +290,7 @@
       on(dojo.byId("labelOpacity"), "change", updateRendererFromUI);
       
       // ### LOD SR event handlers ###
-      on(dijit.byId("lodSpatialReference"), "change", updateLayerFromUIChange);
+      on(dijit.byId("lodSR"), "change", updateLayerFromUIChange);
       on(dojo.byId("useLodSR"), "change", updateLayerFromUIChange);
 
       on(document.getElementsByClassName("collapser")[0], "click", togglePanel);
@@ -1210,7 +1210,7 @@
 
         let lod = dojo.byId("lod").value;
         let lodGeometryAggregationType = dojo.byId("lodGeometryAggregationType").value;
-        const lodType = dojo.byId("aggStyle").value;
+        const lodType = dojo.byId("lodType").value;
         if (dojo.byId("autoOffSet").checked === true) {
           if (lodType === "flatHexagon" || lodType === "pointyHexagon" || lodType === "square" || lodType === 'geotile') {
             lod = (parseInt(lod) + 5).toString();
@@ -1227,7 +1227,7 @@
         url += "/query?lod=" + lod + "&lodType=" + lodType + "&outSR=" + outSR;
         url += "&lodGeometryAggregationType=" + lodGeometryAggregationType;
         if (dojo.byId("useLodSR") && dojo.byId("useLodSR").checked === true) {
-          const lodSR = dijit.byId("lodSpatialReference").value;
+          const lodSR = dijit.byId("lodSR").value;
           url += "&lodSR=" + lodSR;
         }
         url +=  "&returnGeometry=true" + timeParam;
@@ -1741,7 +1741,7 @@
       </div>
       <div title="LOD Aggregation Type" class="config-content" style="padding-bottom: 5px;">
         <div class="input-group input-group-full">
-          <select name="aggStyle" id="aggStyle" style="width: 120px;">
+          <select name="lodType" id="lodType" style="width: 120px;">
             <option value="geohash" selected="selected">GeoHash</option>
             <option value="geotile">GeoTile</option>
             <option value="h3">H3</option>
@@ -1751,20 +1751,20 @@
             <option value="flatTriangle">Flat Triangle</option>
             <option value="pointyTriangle">Pointy Triangle</option>
           </select>
-          <label for="aggStyle">LOD Type</label>
+          <label for="lodType">LOD Type</label>
         </div>
         <div title="LOD Geometry Aggregation Type" class="input-group input-group-full">
           <select name="lodGeometryAggregationType" id="lodGeometryAggregationType" style="width: 120px;">
             <option value="centroid" selected="selected">Centroid</option>
             <option value="shape">Shape</option>
           </select>
-          <label for="aggSubStyle">Geometry</label>
+          <label for="lodGeometryAggregationType">Geometry</label>
         </div>
       </div>
       <div title="Leave unchecked to auto select the LOD Spatial Reference" class="config-content" style="padding-top: 0;">
         <label for="useLodSR">LOD SR</label>
         <input type="checkbox" id="useLodSR" />
-        <select name="lodSpatialReference" data-dojo-type="dijit/form/Select" id="lodSpatialReference" style="width: 200px;">
+        <select name="lodSR" data-dojo-type="dijit/form/Select" id="lodSR" style="width: 200px;">
           <option value="102003">102003 (Albers)</option>
           <option value="102100" selected="selected">102100 (Web Mercator)</option>
           <option value="4326">4326 (WGS84)</option>
