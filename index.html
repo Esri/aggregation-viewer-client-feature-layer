@@ -251,7 +251,7 @@
       on(dojo.byId("refreshMode"), "change", toggleMode);
       on(dojo.byId("autoOffSet"), "change", toggleRefresh);
       on(dojo.byId("aggStyle"), "change", toggleRefresh);
-      on(dojo.byId("aggSubStyle"), "change", toggleRefresh);
+      on(dojo.byId("lodGeometryAggregationType"), "change", toggleRefresh);
       on(dojo.byId("lod"), "change", toggleRefresh);
       on(dojo.byId("blurRadius"), "change", toggleRefresh);
       on(dom.byId("useStats"), "change", toggleStats);
@@ -1209,7 +1209,7 @@
         }
 
         let lod = dojo.byId("lod").value;
-        let lodSubType = dojo.byId("aggSubStyle").value;
+        let lodGeometryAggregationType = dojo.byId("lodGeometryAggregationType").value;
         const lodType = dojo.byId("aggStyle").value;
         if (dojo.byId("autoOffSet").checked === true) {
           if (lodType === "flatHexagon" || lodType === "pointyHexagon" || lodType === "square" || lodType === 'geotile') {
@@ -1754,7 +1754,7 @@
           <label for="aggStyle">LOD Type</label>
         </div>
         <div title="LOD Geometry Aggregation Type" class="input-group input-group-full">
-          <select name="aggSubStyle" id="aggSubStyle" style="width: 120px;">
+          <select name="lodGeometryAggregationType" id="lodGeometryAggregationType" style="width: 120px;">
             <option value="centroid" selected="selected">Centroid</option>
             <option value="shape">Shape</option>
           </select>
