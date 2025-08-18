@@ -215,7 +215,17 @@ section:first-of-type .config-header {
 }
 
 .input-group-checkbox-full {
-  flex-direction: row;  
+  flex-direction: row;
+  justify-content: flex-start;
+}
+
+.input-group-checkbox-full label {
+  flex: 0 0 auto;
+}
+
+.input-group-checkbox-full input {
+  width: min-content;
+  margin: 0;
 }
 
 .input-group-full label {
