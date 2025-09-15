@@ -1167,13 +1167,16 @@
        * @returns {Object|null} RGB object with r, g, b properties or null if invalid
        */
       function hexToRgb(hex) {
-        // Convert hex color to RGB using regex pattern matching
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16)
-        } : null;
+        const hexWithoutHash = hex.replace("#", "");
+
+        const r = parseInt(hexWithoutHash.substring(0, 2), 16);
+        const g = parseInt(hexWithoutHash.substring(2, 4), 16);
+        const b = parseInt(hexWithoutHash.substring(4, 6), 16);
+        return {
+          r,
+          g,
+          b
+        };
       }
 
       /**
