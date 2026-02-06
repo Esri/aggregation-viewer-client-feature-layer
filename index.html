@@ -816,11 +816,6 @@
           if (linkedUri) break;
         }
 
-        if (!linkedUri) {
-          console.warn("No linkedFeatureLayerUri found for field: " + fieldName + " or any parent level.");
-          return;
-        }
-
         // Build the aggregation query against the source layer
         const inputUrl = dojo.byId("inputUrl").value;
         const groupByFieldsStr = groupByFields.join(",");
@@ -847,6 +842,18 @@
           const aggFeatures = Array.isArray(aggResponse.features) ? aggResponse.features : [];
           if (aggFeatures.length === 0) {
             console.warn("Aggregation query returned no features.");
+            return;
+          }
+
+          // Log aggregation results
+          console.log("Aggregation query returned " + aggFeatures.length + " results.");
+
+          // If no linked feature layer URI exists, stop here — just log the results
+          if (!linkedUri) {
+            console.log("No linkedFeatureLayerUri available for field '" + fieldName + "'. Aggregation results (no rendering):");
+            array.forEach(aggFeatures, function (f) {
+              console.log("  " + JSON.stringify(f.attributes));
+            });
             return;
           }
 
