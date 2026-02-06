@@ -110,6 +110,8 @@
       let _layerInfo;
       let _timeSlider;
       const _binRendererProps = {};
+      let _polygonalAggLayerIds = [];
+      let _polygonalAggInfos = null;
       
       // ### Spatial Reference variables ###
       // These variables manage coordinate system transformations and spatial reference handling
@@ -228,6 +230,8 @@
 
       // ### Section visibility state objects ###
       const layersVisibility = { value: true };
+      const polyAggVisibility = { value: true };
+      const polyAggSettingsVisibility = { value: true };
       const aggSettingsVisibility = { value: true };
       const aggStyleVisibility = { value: false };
       const aggBinsVisibility = { value: true };
@@ -244,6 +248,9 @@
       on(dojo.byId("aggStyleToggle"), "click", createSectionToggle("aggStyleSection", "aggStyleToggle", aggStyleVisibility));
       on(dojo.byId("aggBinsToggle"), "click", createSectionToggle("aggBinsSection", "aggBinsToggle", aggBinsVisibility));
       on(dojo.byId("streamingModeToggle"), "click", createSectionToggle("streamingModeSection", "streamingModeToggle", streamingModeVisibility));
+      on(dojo.byId("polyAggToggle"), "click", createSectionToggle("polyAggSection", "polyAggToggle", polyAggVisibility));
+      on(dojo.byId("polyAggSettingsToggle"), "click", createSectionToggle("polyAggSettingsSection", "polyAggSettingsToggle", polyAggSettingsVisibility));
+      on(dojo.byId("applyPolyAggButton"), "click", applyPolygonalAggregation);
       on(dojo.byId("aggLabelsToggle"), "click", createSectionToggle("aggLabelsMainSection", "aggLabelsToggle", aggLabelsVisibility));
 
       on(dojo.byId("setLayerButton"), "click", setFeatureLayers);
@@ -504,22 +511,6 @@
       //#############################################################################################
 
       /**
-       * Toggles the visibility of aggregation labels and their control panel
-       * @param {Event} evt - The change event from the checkbox
-       */
-      function toggleLabels(evt) {
-        // Toggle label visibility and show/hide label controls
-        if (evt.target.id === "renderLabels") {
-          if (dojo.byId("renderLabels").checked === true) {
-            dojo.byId("aggLabelsSection").style.display = "block";
-          } else {
-            dojo.byId("aggLabelsSection").style.display = "none";
-          }
-          updateLayerFromUIChange();
-        }
-      }
-
-      /**
        * Populates the statistical type select options based on the selected field
        * @param {Object} selectedOption - The selected field option
        */
@@ -577,8 +568,418 @@
               _layerInfo = response;
               populateDijitSelectWithLayerFields(dijit.byId('statField'), false);
               statFieldChanged(dijit.byId('statField').value); // to init-populate the stat types control
+              buildPolygonalAggLayerToggles(response);
             }
         );
+      }
+
+      /**
+       * Extracts unique linkedFeatureLayerUri values from polygonalAggInfos
+       * and builds checkbox toggles in the Layers section
+       * @param {Object} layerInfo - The layer info response containing polygonalAggInfos
+       */
+      function buildPolygonalAggLayerToggles(layerInfo) {
+        const container = dojo.byId("polygonalAggLayers");
+        if (!container) return;
+
+        // Clear previous entries
+        container.innerHTML = "";
+
+        // Remove any previously added polygonal agg layers from the map
+        if (_polygonalAggLayerIds) {
+          array.forEach(_polygonalAggLayerIds, function (layerId) {
+            const existingLayer = _map.getLayer(layerId);
+            if (existingLayer) {
+              _map.removeLayer(existingLayer);
+            }
+          });
+        }
+        _polygonalAggLayerIds = [];
+
+        if (!layerInfo || !layerInfo.polygonalAggInfos || !Array.isArray(layerInfo.polygonalAggInfos)) {
+          return;
+        }
+
+        // Collect unique URIs with their associated field/level info
+        const uniqueUris = [];
+        const seenUris = {};
+        array.forEach(layerInfo.polygonalAggInfos, function (aggInfo) {
+          if (!aggInfo.aggAttributeInfos || !Array.isArray(aggInfo.aggAttributeInfos)) return;
+          array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+            if (attrInfo.linkedFeatureLayerUri && !seenUris[attrInfo.linkedFeatureLayerUri]) {
+              seenUris[attrInfo.linkedFeatureLayerUri] = true;
+              uniqueUris.push({
+                uri: attrInfo.linkedFeatureLayerUri,
+                fieldName: attrInfo.fieldName,
+                level: attrInfo.level,
+                aggType: aggInfo.aggType
+              });
+            }
+          });
+        });
+
+        // Populate the Polygonal Aggregations dropdowns
+        populatePolygonalAggDropdowns(layerInfo);
+
+        if (uniqueUris.length === 0) return;
+
+        // Build a checkbox row for each unique URI
+        array.forEach(uniqueUris, function (info, idx) {
+          const layerId = "polyAggLayer_" + idx;
+          _polygonalAggLayerIds.push(layerId);
+
+          // Derive a short display name from the URI
+          const uriParts = info.uri.split("/");
+          const serviceName = uriParts[uriParts.length - 3] || info.uri;
+          const displayName = serviceName.replace(/_/g, " ");
+
+          var row = document.createElement("div");
+          row.title = info.uri;
+          row.style.cssText = "display:flex; align-items:center; justify-content:space-between; width:100%; margin:3px 0;";
+
+          var label = document.createElement("label");
+          label.setAttribute("for", layerId);
+          label.textContent = displayName + " (" + info.fieldName + ")";
+          label.style.cssText = "flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:8px;";
+
+          var checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = layerId;
+          checkbox.setAttribute("data-uri", info.uri);
+          checkbox.setAttribute("data-layer-id", layerId);
+          checkbox.style.cssText = "flex:0 0 auto; margin:0;";
+
+          row.appendChild(label);
+          row.appendChild(checkbox);
+          container.appendChild(row);
+
+          // Attach toggle handler
+          on(checkbox, "change", function () {
+            togglePolygonalAggLayer(this);
+          });
+        });
+      }
+
+      /**
+       * Toggles a polygonal aggregation feature layer on/off based on checkbox state
+       * @param {HTMLInputElement} checkbox - The checkbox element with data-uri and data-layer-id attributes
+       */
+      function togglePolygonalAggLayer(checkbox) {
+        const uri = checkbox.getAttribute("data-uri");
+        const layerId = checkbox.getAttribute("data-layer-id");
+
+        const existingLayer = _map.getLayer(layerId);
+        if (existingLayer) {
+          // Layer already on the map – just toggle visibility
+          existingLayer.setVisibility(checkbox.checked);
+          console.log((checkbox.checked ? "Showed" : "Hid") + " polygonal aggregation layer: " + uri);
+        } else if (checkbox.checked) {
+          // First time – add the feature layer to the map
+          const featureLayer = new FeatureLayer(uri, {
+            id: layerId,
+            outFields: ["*"],
+            opacity: 0.6
+          });
+          _map.addLayer(featureLayer);
+          console.log("Added polygonal aggregation layer: " + uri);
+        }
+      }
+
+      /**
+       * Populates the Polygonal Aggregations dropdowns from polygonalAggInfos
+       * - "Aggregation Type" dropdown from aggType values
+       * - "Aggregation Field" dropdown from the selected aggType's aggAttributeInfos fieldName entries
+       * @param {Object} layerInfo - The layer info response containing polygonalAggInfos
+       */
+      function populatePolygonalAggDropdowns(layerInfo) {
+        const typeSelect = dojo.byId("polyAggType");
+        const fieldSelect = dojo.byId("polyAggField");
+        if (!typeSelect || !fieldSelect) return;
+
+        // Clear existing options
+        typeSelect.innerHTML = "";
+        fieldSelect.innerHTML = "";
+
+        if (!layerInfo || !layerInfo.polygonalAggInfos || !Array.isArray(layerInfo.polygonalAggInfos)) {
+          return;
+        }
+
+        // Store the full polygonalAggInfos for use when type changes
+        _polygonalAggInfos = layerInfo.polygonalAggInfos;
+
+        // Populate Aggregation Type dropdown with unique aggType values
+        array.forEach(_polygonalAggInfos, function (aggInfo, idx) {
+          const option = document.createElement("option");
+          option.value = idx;
+          option.textContent = aggInfo.aggType;
+          typeSelect.appendChild(option);
+        });
+
+        // Populate Aggregation Field based on the first aggType
+        updatePolyAggFieldDropdown();
+
+        // Attach change handler for Aggregation Type
+        on(typeSelect, "change", updatePolyAggFieldDropdown);
+      }
+
+      /**
+       * Updates the Aggregation Field dropdown based on the currently selected Aggregation Type
+       */
+      function updatePolyAggFieldDropdown() {
+        const typeSelect = dojo.byId("polyAggType");
+        const fieldSelect = dojo.byId("polyAggField");
+        if (!typeSelect || !fieldSelect || !_polygonalAggInfos) return;
+
+        fieldSelect.innerHTML = "";
+
+        const selectedIdx = parseInt(typeSelect.value);
+        if (isNaN(selectedIdx) || !_polygonalAggInfos[selectedIdx]) return;
+
+        const aggInfo = _polygonalAggInfos[selectedIdx];
+        if (!aggInfo.aggAttributeInfos || !Array.isArray(aggInfo.aggAttributeInfos)) return;
+
+        array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+          const option = document.createElement("option");
+          option.value = attrInfo.fieldName;
+          option.textContent = attrInfo.fieldName + " (level " + attrInfo.level + ")";
+          fieldSelect.appendChild(option);
+        });
+      }
+
+      /**
+       * Sends a polygonal aggregation query, then joins results to the matching
+       * linked feature layer and applies a ClassBreaksRenderer.
+       *
+       * Flow:
+       *  1. Read selected aggType / fieldName from the UI
+       *  2. Query inputUrl with groupByFieldsForStatistics=<fieldName>
+       *  3. Find the linkedFeatureLayerUri that matches the selected field
+       *  4. Query the linked feature layer for its features
+       *  5. Join aggregation counts to linked features via the common field
+       *  6. Apply a ClassBreaksRenderer to visualise the result
+       */
+      function applyPolygonalAggregation() {
+        if (!_polygonalAggInfos) {
+          console.warn("No polygonalAggInfos available.");
+          return;
+        }
+
+        const typeSelect = dojo.byId("polyAggType");
+        const fieldSelect = dojo.byId("polyAggField");
+        if (!typeSelect || !fieldSelect) return;
+
+        const selectedIdx = parseInt(typeSelect.value);
+        const fieldName = fieldSelect.value;
+        if (isNaN(selectedIdx) || !fieldName) return;
+
+        const aggInfo = _polygonalAggInfos[selectedIdx];
+        if (!aggInfo || !aggInfo.aggAttributeInfos) return;
+
+        // Find the selected attrInfo and its level
+        let selectedAttrInfo = null;
+        array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+          if (attrInfo.fieldName === fieldName) {
+            selectedAttrInfo = attrInfo;
+          }
+        });
+        if (!selectedAttrInfo) return;
+
+        const selectedLevel = selectedAttrInfo.level;
+
+        // Collect all field names from level 0 up to and including the selected level
+        // for groupByFieldsForStatistics
+        const groupByFields = [];
+        array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+          if (attrInfo.level <= selectedLevel) {
+            groupByFields.push(attrInfo.fieldName);
+          }
+        });
+        // Sort by level to ensure correct order
+        groupByFields.sort(function (a, b) {
+          let levelA = 0, levelB = 0;
+          array.forEach(aggInfo.aggAttributeInfos, function (ai) {
+            if (ai.fieldName === a) levelA = ai.level;
+            if (ai.fieldName === b) levelB = ai.level;
+          });
+          return levelA - levelB;
+        });
+
+        // Find linkedFeatureLayerUri: use the selected field's URI,
+        // or traverse up to lower levels to find the nearest parent with a URI
+        let linkedUri = null;
+        for (let lvl = selectedLevel; lvl >= 0; lvl--) {
+          array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+            if (attrInfo.level === lvl && attrInfo.linkedFeatureLayerUri && !linkedUri) {
+              linkedUri = attrInfo.linkedFeatureLayerUri;
+            }
+          });
+          if (linkedUri) break;
+        }
+
+        if (!linkedUri) {
+          console.warn("No linkedFeatureLayerUri found for field: " + fieldName + " or any parent level.");
+          return;
+        }
+
+        // Build the aggregation query against the source layer
+        const inputUrl = dojo.byId("inputUrl").value;
+        const groupByFieldsStr = groupByFields.join(",");
+        const outStatistics = JSON.stringify([{
+          statisticType: "count",
+          onStatisticField: fieldName,
+          outStatisticFieldName: "agg_count"
+        }]);
+        const queryUrl = inputUrl + "/query?where=1%3D1" +
+          "&groupByFieldsForStatistics=" + encodeURIComponent(groupByFieldsStr) +
+          "&outStatistics=" + encodeURIComponent(outStatistics) +
+          "&returnGeometry=false&f=pjson";
+
+        console.log("Polygonal aggregation query: " + queryUrl);
+
+        // Step 1: Query aggregation stats from the source layer
+        const aggRequest = esriRequest({
+          url: queryUrl,
+          handleAs: "json",
+          callbackParamName: "callback"
+        });
+
+        aggRequest.then(function (aggResponse) {
+          const aggFeatures = Array.isArray(aggResponse.features) ? aggResponse.features : [];
+          if (aggFeatures.length === 0) {
+            console.warn("Aggregation query returned no features.");
+            return;
+          }
+
+          // Build a lookup: fieldValue -> agg_count
+          const aggLookup = {};
+          let maxCount = 0;
+          array.forEach(aggFeatures, function (f) {
+            const key = f.attributes[fieldName];
+            const count = f.attributes["agg_count"] || 0;
+            aggLookup[key] = count;
+            if (count > maxCount) maxCount = count;
+          });
+
+          // Step 2: Query the linked feature layer for geometries
+          const linkedQueryUrl = linkedUri + "/query?where=1%3D1" +
+            "&outFields=" + encodeURIComponent(fieldName) +
+            "&returnGeometry=true&outSR=" + _currentMapSR + "&f=pjson";
+
+          const linkedRequest = esriRequest({
+            url: linkedQueryUrl,
+            handleAs: "json",
+            callbackParamName: "callback"
+          });
+
+          linkedRequest.then(function (linkedResponse) {
+            const linkedFeatures = Array.isArray(linkedResponse.features) ? linkedResponse.features : [];
+            if (linkedFeatures.length === 0) {
+              console.warn("Linked feature layer returned no features.");
+              return;
+            }
+
+            // Remove previous polygonal aggregation result layer if it exists
+            const prevResultLayer = _map.getLayer("polyAggResult");
+            if (prevResultLayer) {
+              _map.removeLayer(prevResultLayer);
+            }
+
+            // Create a new client-side feature layer for the aggregation results
+            const resultLayerDef = {
+              geometryType: "esriGeometryPolygon",
+              fields: [
+                { name: "objectid", type: "esriFieldTypeOID", alias: "objectid" },
+                { name: fieldName, type: "esriFieldTypeString", alias: fieldName },
+                { name: "agg_count", type: "esriFieldTypeInteger", alias: "Aggregation Count" }
+              ]
+            };
+            const resultCollection = {
+              layerDefinition: resultLayerDef,
+              featureSet: {
+                features: [],
+                geometryType: "esriGeometryPolygon"
+              }
+            };
+            const resultInfoTemplate = new InfoTemplate("Aggregation Result", "${*}");
+            const resultLayer = new FeatureLayer(resultCollection, {
+              id: "polyAggResult",
+              objectIdField: "objectid",
+              showLabels: true,
+              infoTemplate: resultInfoTemplate,
+              outFields: ["*"]
+            });
+
+            // Build graphics by joining linked geometries with aggregation counts
+            const mapSR = new SpatialReference(_map.spatialReference.wkid);
+            const graphics = [];
+            array.forEach(linkedFeatures, function (feature) {
+              if (!feature.geometry) return;
+              feature.geometry.spatialReference = mapSR.toJson();
+              const geometry = new Polygon(feature.geometry);
+              const key = feature.attributes[fieldName];
+              const aggCount = aggLookup[key] || 0;
+              const attrs = {};
+              attrs[fieldName] = key;
+              attrs["agg_count"] = aggCount;
+              const graphic = new Graphic(geometry, null, attrs, null);
+              graphics.push(graphic);
+            });
+
+            // Apply a ClassBreaksRenderer based on agg_count
+            const renderer = createPolyAggClassBreaksRenderer(maxCount);
+            resultLayer.setRenderer(renderer);
+
+            _map.addLayer(resultLayer);
+
+            resultLayer.on("load", function () {
+              resultLayer.applyEdits(graphics, null, null).then(function () {
+                resultLayer.refresh();
+                console.log("Polygonal aggregation result layer added: " + graphics.length + " features.");
+              });
+            });
+
+          }, function (error) {
+            console.log("Error querying linked feature layer: " + error.message);
+          });
+
+        }, function (error) {
+          console.log("Error querying polygonal aggregation: " + error.message);
+        });
+      }
+
+      /**
+       * Creates a ClassBreaksRenderer for polygonal aggregation results
+       * Uses the "agg_count" field with color ramp from light to dark
+       * @param {number} maxCount - The maximum aggregation count for scaling breaks
+       * @returns {ClassBreaksRenderer} The renderer instance
+       */
+      function createPolyAggClassBreaksRenderer(maxCount) {
+        if (maxCount <= 0) maxCount = 1;
+
+        function createSymbol(color) {
+          return new SimpleFillSymbol()
+            .setColor(color)
+            .setOutline(
+              new SimpleLineSymbol().setColor(new Color([99, 99, 99, 1])).setWidth(0.5)
+            );
+        }
+
+        const breakSize = maxCount / 7;
+        const renderer = new ClassBreaksRenderer({
+          field: "agg_count",
+          defaultSymbol: createSymbol(new Color([150, 150, 150, 0.3])),
+          classBreakInfos: [
+            { minValue: 0, maxValue: breakSize, symbol: createSymbol(new Color([254, 240, 217, 0.7])) },
+            { minValue: breakSize, maxValue: breakSize * 2, symbol: createSymbol(new Color([253, 212, 158, 0.7])) },
+            { minValue: breakSize * 2, maxValue: breakSize * 3, symbol: createSymbol(new Color([253, 187, 132, 0.8])) },
+            { minValue: breakSize * 3, maxValue: breakSize * 4, symbol: createSymbol(new Color([252, 141, 89, 0.8])) },
+            { minValue: breakSize * 4, maxValue: breakSize * 5, symbol: createSymbol(new Color([239, 101, 72, 0.9])) },
+            { minValue: breakSize * 5, maxValue: breakSize * 6, symbol: createSymbol(new Color([215, 48, 31, 0.9])) },
+            { minValue: breakSize * 6, maxValue: maxCount + 1, symbol: createSymbol(new Color([153, 0, 0, 1])) }
+          ]
+        });
+
+        return renderer;
       }
 
       function populateDijitSelectWithLayerFields(select, numericOnly) {
@@ -600,30 +1001,6 @@
         }
       }
 
-      /**
-       * Populates the select element with layer fields
-       * @param {Object} select - The select element to populate
-       * @param {boolean} numericOnly - Whether to include only numeric fields
-       */
-      function populateSelectWithLayerFields(select, numericOnly) {
-        // clear exiting options
-        for (let i = select.options.length - 1; i >= 0; i--) {
-          select.remove(i);
-        }
-
-        // populate options based on the layerFields array
-        let pos = 0;
-        for (let i = 0; i < layerFields.length; i++) {
-          const field = _layerInfo.fields[i];
-          if (numericOnly) {
-            if (isFieldNumeric(field))
-              select.options[pos++] = new Option(field.name, field.name);
-          } else {
-            if (isSupportedStatField(field))
-              select.options[pos++] = new Option(field.name, field.name);
-          }
-        }
-      }
 
       /**
        * Checks if the field is numeric
@@ -1707,6 +2084,42 @@
             <option value="3365">3365 (NAD_1983_HARN_StatePlane_Pennsylvania_South_FIPS_3702_Feet)</option>
           </select>
           <label for="spatialReferenceSelect">Map SR</label>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- [Section 1.5] Polygonal Aggregation Layers -->
+    <section id="polyAggSection">
+      <div class="config-header">
+        <h2>Polygonal Aggregation Layers</h2>
+        <div class="header-actions-group">
+          <a href="#" id="polyAggToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
+      </div>
+      <div class="config-content" id="polygonalAggLayers">
+      </div>
+    </section>
+
+    <!-- [Section 1.6] Polygonal Aggregations -->
+    <section id="polyAggSettingsSection">
+      <div class="config-header">
+        <h2>Polygonal Aggregations</h2>
+        <div class="header-actions-group">
+          <a href="#" id="polyAggSettingsToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
+      </div>
+      <div class="config-content" style="padding-bottom: 5px;">
+        <div class="input-group input-group-full">
+          <select id="polyAggType" style="width: 120px;"></select>
+          <label for="polyAggType">Aggregation Type</label>
+        </div>
+        <div class="input-group input-group-full">
+          <select id="polyAggField" style="width: 120px;"></select>
+          <label for="polyAggField">Aggregation Field</label>
+        </div>
+        <div class="input-row">
+          <input type="button" class="button" id="applyPolyAggButton" value="Apply" />
         </div>
       </div>
     </section>
