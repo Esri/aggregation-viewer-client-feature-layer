@@ -950,18 +950,10 @@
             return;
           }
 
-          // If "(All)" is selected and this is NOT a direct-apply field, just log results
-          if (!directApply && !selectedFieldValue) {
-            console.log("Field Value is '(All)'. Aggregation results (no rendering):");
-            array.forEach(aggFeatures, function (f) {
-              console.log("  " + JSON.stringify(f.attributes));
-            });
-            return;
-          }
-
           // Build a lookup keyed by join fields (the fields the linked layer has).
-          // If the selected level is higher than the linked level, sum up counts
-          // across the extra levels (e.g., sum floor counts per building).
+          // When the selected level is higher than the linked level (e.g., "floor"
+          // aggregated onto the "building" layer), sum counts across the extra levels
+          // using the join fields (campus + building) as composite keys.
           const aggLookup = {};
           let maxCount = 0;
           array.forEach(aggFeatures, function (f) {
