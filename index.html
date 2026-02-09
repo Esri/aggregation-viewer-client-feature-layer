@@ -901,6 +901,10 @@
         const fieldValueSelect = dojo.byId("polyAggFieldValues");
         const selectedFieldValue = fieldValueSelect ? fieldValueSelect.value : "";
 
+        // When the selected level matches the linked level (e.g., "campus" or "building"),
+        // apply aggregation directly without requiring a specific field value selection.
+        const directApply = (linkedLevel >= 0 && selectedLevel === linkedLevel);
+
         // Build the aggregation query against the source layer
         const inputUrl = dojo.byId("inputUrl").value;
         const groupByFieldsStr = groupByFields.join(",");
@@ -910,7 +914,7 @@
           outStatisticFieldName: "agg_count"
         }]);
         let whereClause = "1=1";
-        if (selectedFieldValue) {
+        if (!directApply && selectedFieldValue) {
           whereClause = fieldName + "='" + selectedFieldValue.replace(/'/g, "''") + "'";
         }
         const queryUrl = inputUrl + "/query?where=" + encodeURIComponent(whereClause) +
@@ -946,8 +950,8 @@
             return;
           }
 
-          // If "(All)" is selected, just log results — do not create a result layer
-          if (!selectedFieldValue) {
+          // If "(All)" is selected and this is NOT a direct-apply field, just log results
+          if (!directApply && !selectedFieldValue) {
             console.log("Field Value is '(All)'. Aggregation results (no rendering):");
             array.forEach(aggFeatures, function (f) {
               console.log("  " + JSON.stringify(f.attributes));
