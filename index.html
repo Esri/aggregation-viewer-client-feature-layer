@@ -865,11 +865,12 @@
           return levelA - levelB;
         });
 
-        // Find linkedFeatureLayerUri: use the selected field's URI,
-        // or traverse up to lower levels to find the nearest parent with a URI.
-        // Also track which level the linked URI comes from (the "join level").
+        // Find linkedFeatureLayerUri: first check the selected level and traverse
+        // up to lower levels (parent). If not found, check one level below (child).
+        // Track which level the linked URI comes from (the "linked level").
         let linkedUri = null;
         let linkedLevel = -1;
+        // Search upward (selected level down to 0)
         for (let lvl = selectedLevel; lvl >= 0; lvl--) {
           array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
             if (attrInfo.level === lvl && attrInfo.linkedFeatureLayerUri && !linkedUri) {
@@ -878,6 +879,15 @@
             }
           });
           if (linkedUri) break;
+        }
+        // If not found, search one level below (selected level + 1)
+        if (!linkedUri) {
+          array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+            if (attrInfo.level === selectedLevel + 1 && attrInfo.linkedFeatureLayerUri && !linkedUri) {
+              linkedUri = attrInfo.linkedFeatureLayerUri;
+              linkedLevel = attrInfo.level;
+            }
+          });
         }
 
         // Determine the join fields: fields from level 0 up to the linked level.
@@ -897,13 +907,34 @@
           return levelA - levelB;
         });
 
+        // Determine the common fields between aggregation results and linked layer.
+        // When linkedLevel > selectedLevel (linked layer is a child), the common
+        // fields are those up to selectedLevel (e.g., "campus" joins campus agg
+        // results to building features). When linkedLevel <= selectedLevel, the
+        // common fields are the join fields themselves.
+        const commonFields = [];
+        array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+          if (attrInfo.level <= Math.min(selectedLevel, linkedLevel)) {
+            commonFields.push(attrInfo.fieldName);
+          }
+        });
+        commonFields.sort(function (a, b) {
+          let levelA = 0, levelB = 0;
+          array.forEach(aggInfo.aggAttributeInfos, function (ai) {
+            if (ai.fieldName === a) levelA = ai.level;
+            if (ai.fieldName === b) levelB = ai.level;
+          });
+          return levelA - levelB;
+        });
+
         // Check if a specific field value is selected
         const fieldValueSelect = dojo.byId("polyAggFieldValues");
         const selectedFieldValue = fieldValueSelect ? fieldValueSelect.value : "";
 
-        // When the selected level matches the linked level (e.g., "campus" or "building"),
-        // apply aggregation directly without requiring a specific field value selection.
-        const directApply = (linkedLevel >= 0 && selectedLevel === linkedLevel);
+        // Apply aggregation directly (without field value filtering) when the selected
+        // level matches or is above the linked level. E.g., "campus" (level 0) with
+        // building linked layer (level 1), or "building" (level 1) with its own layer.
+        const directApply = (linkedLevel >= 0 && selectedLevel <= linkedLevel);
 
         // Build the aggregation query against the source layer
         const inputUrl = dojo.byId("inputUrl").value;
@@ -946,24 +977,24 @@
             return;
           }
 
-          // When the selected level is higher than the linked level (e.g., "floor"
-          // aggregated onto the "building" layer), filter aggregation results by the
-          // selected field value (if any), then sum counts using the join fields
-          // (campus + building) as composite keys.
-          // For direct-apply fields (campus, building), no filtering is needed.
+          // Build a lookup keyed by the common fields between aggregation results
+          // and the linked layer. Filter by selected field value if applicable,
+          // then sum counts using the common fields as composite keys.
+          // E.g., "floor" agg results summed per campus+building to join with
+          // building layer; "campus" agg results joined to building layer by campus.
           const aggLookup = {};
           let maxCount = 0;
           array.forEach(aggFeatures, function (f) {
-            // If a specific field value is selected for a higher-level field,
+            // If a specific field value is selected for a non-direct-apply field,
             // only include aggregation results matching that value
             if (!directApply && selectedFieldValue) {
               const val = f.attributes[fieldName];
               if (String(val) !== String(selectedFieldValue)) return;
             }
-            // Build a composite key from the join fields
+            // Build a composite key from the common fields
             const keyParts = [];
-            array.forEach(joinFields, function (jf) {
-              keyParts.push(f.attributes[jf] || "");
+            array.forEach(commonFields, function (cf) {
+              keyParts.push(f.attributes[cf] || "");
             });
             const key = keyParts.join("|");
             const count = f.attributes["agg_count"] || 0;
@@ -1037,10 +1068,10 @@
               feature.geometry.spatialReference = mapSR.toJson();
               const geometry = new Polygon(feature.geometry);
 
-              // Build composite key from the linked feature's join fields
+              // Build composite key from the linked feature's common fields
               const keyParts = [];
-              array.forEach(joinFields, function (jf) {
-                keyParts.push(feature.attributes[jf] || "");
+              array.forEach(commonFields, function (cf) {
+                keyParts.push(feature.attributes[cf] || "");
               });
               const key = keyParts.join("|");
               const aggCount = aggLookup[key] || 0;
