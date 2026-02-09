@@ -720,6 +720,9 @@
 
         // Attach change handler for Aggregation Type
         on(typeSelect, "change", updatePolyAggFieldDropdown);
+
+        // Attach change handler for Aggregation Field to refresh unique values
+        on(fieldSelect, "change", populatePolyAggFieldValues);
       }
 
       /**
@@ -743,6 +746,64 @@
           option.value = attrInfo.fieldName;
           option.textContent = attrInfo.fieldName + " (level " + attrInfo.level + ")";
           fieldSelect.appendChild(option);
+        });
+
+        // Populate unique values for the initially selected field
+        populatePolyAggFieldValues();
+      }
+
+      /**
+       * Queries the source layer for unique values of the currently selected Aggregation Field
+       * and populates the Field Value dropdown
+       */
+      function populatePolyAggFieldValues() {
+        const fieldSelect = dojo.byId("polyAggField");
+        const valuesSelect = dojo.byId("polyAggFieldValues");
+        if (!fieldSelect || !valuesSelect) return;
+
+        const fieldName = fieldSelect.value;
+
+        // Reset to just the "(All)" option
+        valuesSelect.innerHTML = "";
+        const allOption = document.createElement("option");
+        allOption.value = "";
+        allOption.textContent = "(All)";
+        valuesSelect.appendChild(allOption);
+
+        if (!fieldName) return;
+
+        // Query unique values using groupByFieldsForStatistics with count
+        const inputUrl = dojo.byId("inputUrl").value;
+        const outStatistics = JSON.stringify([{
+          statisticType: "count",
+          onStatisticField: fieldName,
+          outStatisticFieldName: "cnt"
+        }]);
+        const queryUrl = inputUrl + "/query?where=1%3D1" +
+          "&groupByFieldsForStatistics=" + encodeURIComponent(fieldName) +
+          "&outStatistics=" + encodeURIComponent(outStatistics) +
+          "&returnGeometry=false&f=pjson";
+
+        const request = esriRequest({
+          url: queryUrl,
+          handleAs: "json",
+          callbackParamName: "callback"
+        });
+
+        request.then(function (response) {
+          const features = Array.isArray(response.features) ? response.features : [];
+          array.forEach(features, function (f) {
+            const val = f.attributes[fieldName];
+            if (val !== null && val !== undefined) {
+              const option = document.createElement("option");
+              option.value = val;
+              option.textContent = val;
+              valuesSelect.appendChild(option);
+            }
+          });
+          console.log("Populated " + features.length + " unique values for field: " + fieldName);
+        }, function (error) {
+          console.log("Error querying unique values for field " + fieldName + ": " + error.message);
         });
       }
 
@@ -805,16 +866,40 @@
         });
 
         // Find linkedFeatureLayerUri: use the selected field's URI,
-        // or traverse up to lower levels to find the nearest parent with a URI
+        // or traverse up to lower levels to find the nearest parent with a URI.
+        // Also track which level the linked URI comes from (the "join level").
         let linkedUri = null;
+        let linkedLevel = -1;
         for (let lvl = selectedLevel; lvl >= 0; lvl--) {
           array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
             if (attrInfo.level === lvl && attrInfo.linkedFeatureLayerUri && !linkedUri) {
               linkedUri = attrInfo.linkedFeatureLayerUri;
+              linkedLevel = lvl;
             }
           });
           if (linkedUri) break;
         }
+
+        // Determine the join fields: fields from level 0 up to the linked level.
+        // These are the fields that the linked feature layer actually has.
+        const joinFields = [];
+        array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+          if (attrInfo.level <= linkedLevel) {
+            joinFields.push(attrInfo.fieldName);
+          }
+        });
+        joinFields.sort(function (a, b) {
+          let levelA = 0, levelB = 0;
+          array.forEach(aggInfo.aggAttributeInfos, function (ai) {
+            if (ai.fieldName === a) levelA = ai.level;
+            if (ai.fieldName === b) levelB = ai.level;
+          });
+          return levelA - levelB;
+        });
+
+        // Check if a specific field value is selected
+        const fieldValueSelect = dojo.byId("polyAggFieldValues");
+        const selectedFieldValue = fieldValueSelect ? fieldValueSelect.value : "";
 
         // Build the aggregation query against the source layer
         const inputUrl = dojo.byId("inputUrl").value;
@@ -824,7 +909,11 @@
           onStatisticField: fieldName,
           outStatisticFieldName: "agg_count"
         }]);
-        const queryUrl = inputUrl + "/query?where=1%3D1" +
+        let whereClause = "1=1";
+        if (selectedFieldValue) {
+          whereClause = fieldName + "='" + selectedFieldValue.replace(/'/g, "''") + "'";
+        }
+        const queryUrl = inputUrl + "/query?where=" + encodeURIComponent(whereClause) +
           "&groupByFieldsForStatistics=" + encodeURIComponent(groupByFieldsStr) +
           "&outStatistics=" + encodeURIComponent(outStatistics) +
           "&returnGeometry=false&f=pjson";
@@ -857,19 +946,40 @@
             return;
           }
 
-          // Build a lookup: fieldValue -> agg_count
+          // If "(All)" is selected, just log results — do not create a result layer
+          if (!selectedFieldValue) {
+            console.log("Field Value is '(All)'. Aggregation results (no rendering):");
+            array.forEach(aggFeatures, function (f) {
+              console.log("  " + JSON.stringify(f.attributes));
+            });
+            return;
+          }
+
+          // Build a lookup keyed by join fields (the fields the linked layer has).
+          // If the selected level is higher than the linked level, sum up counts
+          // across the extra levels (e.g., sum floor counts per building).
           const aggLookup = {};
           let maxCount = 0;
           array.forEach(aggFeatures, function (f) {
-            const key = f.attributes[fieldName];
+            // Build a composite key from the join fields
+            const keyParts = [];
+            array.forEach(joinFields, function (jf) {
+              keyParts.push(f.attributes[jf] || "");
+            });
+            const key = keyParts.join("|");
             const count = f.attributes["agg_count"] || 0;
-            aggLookup[key] = count;
-            if (count > maxCount) maxCount = count;
+            aggLookup[key] = (aggLookup[key] || 0) + count;
           });
+          // Calculate maxCount after summing
+          for (var k in aggLookup) {
+            if (aggLookup[k] > maxCount) maxCount = aggLookup[k];
+          }
 
           // Step 2: Query the linked feature layer for geometries
+          // Request the join fields so we can match
+          const linkedOutFields = joinFields.join(",");
           const linkedQueryUrl = linkedUri + "/query?where=1%3D1" +
-            "&outFields=" + encodeURIComponent(fieldName) +
+            "&outFields=" + encodeURIComponent(linkedOutFields) +
             "&returnGeometry=true&outSR=" + _currentMapSR + "&f=pjson";
 
           const linkedRequest = esriRequest({
@@ -891,14 +1001,18 @@
               _map.removeLayer(prevResultLayer);
             }
 
-            // Create a new client-side feature layer for the aggregation results
+            // Create field definitions for the result layer
+            const resultFields = [
+              { name: "objectid", type: "esriFieldTypeOID", alias: "objectid" },
+              { name: "agg_count", type: "esriFieldTypeInteger", alias: "Aggregation Count" }
+            ];
+            array.forEach(joinFields, function (jf) {
+              resultFields.push({ name: jf, type: "esriFieldTypeString", alias: jf });
+            });
+
             const resultLayerDef = {
               geometryType: "esriGeometryPolygon",
-              fields: [
-                { name: "objectid", type: "esriFieldTypeOID", alias: "objectid" },
-                { name: fieldName, type: "esriFieldTypeString", alias: fieldName },
-                { name: "agg_count", type: "esriFieldTypeInteger", alias: "Aggregation Count" }
-              ]
+              fields: resultFields
             };
             const resultCollection = {
               layerDefinition: resultLayerDef,
@@ -923,10 +1037,19 @@
               if (!feature.geometry) return;
               feature.geometry.spatialReference = mapSR.toJson();
               const geometry = new Polygon(feature.geometry);
-              const key = feature.attributes[fieldName];
+
+              // Build composite key from the linked feature's join fields
+              const keyParts = [];
+              array.forEach(joinFields, function (jf) {
+                keyParts.push(feature.attributes[jf] || "");
+              });
+              const key = keyParts.join("|");
               const aggCount = aggLookup[key] || 0;
+
               const attrs = {};
-              attrs[fieldName] = key;
+              array.forEach(joinFields, function (jf) {
+                attrs[jf] = feature.attributes[jf];
+              });
               attrs["agg_count"] = aggCount;
               const graphic = new Graphic(geometry, null, attrs, null);
               graphics.push(graphic);
@@ -2124,6 +2247,12 @@
         <div class="input-group input-group-full">
           <select id="polyAggField" style="width: 120px;"></select>
           <label for="polyAggField">Aggregation Field</label>
+        </div>
+        <div class="input-group input-group-full">
+          <select id="polyAggFieldValues" style="width: 120px;">
+            <option value="">(All)</option>
+          </select>
+          <label for="polyAggFieldValues">Field Value</label>
         </div>
         <div class="input-row">
           <input type="button" class="button" id="applyPolyAggButton" value="Apply" />
