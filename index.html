@@ -913,11 +913,7 @@
           onStatisticField: fieldName,
           outStatisticFieldName: "agg_count"
         }]);
-        let whereClause = "1=1";
-        if (!directApply && selectedFieldValue) {
-          whereClause = fieldName + "='" + selectedFieldValue.replace(/'/g, "''") + "'";
-        }
-        const queryUrl = inputUrl + "/query?where=" + encodeURIComponent(whereClause) +
+        const queryUrl = inputUrl + "/query?where=" + encodeURIComponent("1=1") +
           "&groupByFieldsForStatistics=" + encodeURIComponent(groupByFieldsStr) +
           "&outStatistics=" + encodeURIComponent(outStatistics) +
           "&returnGeometry=false&f=pjson";
@@ -950,13 +946,20 @@
             return;
           }
 
-          // Build a lookup keyed by join fields (the fields the linked layer has).
           // When the selected level is higher than the linked level (e.g., "floor"
-          // aggregated onto the "building" layer), sum counts across the extra levels
-          // using the join fields (campus + building) as composite keys.
+          // aggregated onto the "building" layer), filter aggregation results by the
+          // selected field value (if any), then sum counts using the join fields
+          // (campus + building) as composite keys.
+          // For direct-apply fields (campus, building), no filtering is needed.
           const aggLookup = {};
           let maxCount = 0;
           array.forEach(aggFeatures, function (f) {
+            // If a specific field value is selected for a higher-level field,
+            // only include aggregation results matching that value
+            if (!directApply && selectedFieldValue) {
+              const val = f.attributes[fieldName];
+              if (String(val) !== String(selectedFieldValue)) return;
+            }
             // Build a composite key from the join fields
             const keyParts = [];
             array.forEach(joinFields, function (jf) {
