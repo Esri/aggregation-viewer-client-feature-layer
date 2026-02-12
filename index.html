@@ -757,9 +757,10 @@
        * and populates the Field Value dropdown
        */
       function populatePolyAggFieldValues() {
+        const typeSelect = dojo.byId("polyAggType");
         const fieldSelect = dojo.byId("polyAggField");
         const valuesSelect = dojo.byId("polyAggFieldValues");
-        if (!fieldSelect || !valuesSelect) return;
+        if (!typeSelect || !fieldSelect || !valuesSelect) return;
 
         const fieldName = fieldSelect.value;
 
@@ -770,17 +771,25 @@
         allOption.textContent = "(All)";
         valuesSelect.appendChild(allOption);
 
-        if (!fieldName) return;
+        if (!fieldName || !_polygonalAggInfos) return;
+
+        // Build the prefixed field name for the server query
+        const selectedIdx = parseInt(typeSelect.value);
+        if (isNaN(selectedIdx)) return;
+        const aggInfo = _polygonalAggInfos[selectedIdx];
+        if (!aggInfo) return;
+        const aggTypePrefix = "---geo_hash---." + aggInfo.aggType;
+        const prefixedFieldName = aggTypePrefix + "." + fieldName;
 
         // Query unique values using groupByFieldsForStatistics with count
         const inputUrl = dojo.byId("inputUrl").value;
         const outStatistics = JSON.stringify([{
           statisticType: "count",
-          onStatisticField: fieldName,
+          onStatisticField: prefixedFieldName,
           outStatisticFieldName: "cnt"
         }]);
         const queryUrl = inputUrl + "/query?where=1%3D1" +
-          "&groupByFieldsForStatistics=" + encodeURIComponent(fieldName) +
+          "&groupByFieldsForStatistics=" + encodeURIComponent(prefixedFieldName) +
           "&outStatistics=" + encodeURIComponent(outStatistics) +
           "&returnGeometry=false&f=pjson";
 
@@ -793,7 +802,7 @@
         request.then(function (response) {
           const features = Array.isArray(response.features) ? response.features : [];
           array.forEach(features, function (f) {
-            const val = f.attributes[fieldName];
+            const val = f.attributes[prefixedFieldName];
             if (val !== null && val !== undefined) {
               const option = document.createElement("option");
               option.value = val;
@@ -936,12 +945,18 @@
         // building linked layer (level 1), or "building" (level 1) with its own layer.
         const directApply = (linkedLevel >= 0 && selectedLevel <= linkedLevel);
 
-        // Build the aggregation query against the source layer
+        // Build the aggregation query against the source layer.
+        // Each field in groupByFieldsForStatistics and onStatisticField needs
+        // the prefix "---geo_hash---.{aggType}" for the server query.
         const inputUrl = dojo.byId("inputUrl").value;
-        const groupByFieldsStr = groupByFields.join(",");
+        const aggTypePrefix = "---geo_hash---." + aggInfo.aggType;
+        const prefixedGroupByFields = groupByFields.map(function (f) {
+          return aggTypePrefix + "." + f;
+        });
+        const groupByFieldsStr = prefixedGroupByFields.join(",");
         const outStatistics = JSON.stringify([{
           statisticType: "count",
-          onStatisticField: fieldName,
+          onStatisticField: aggTypePrefix + "." + fieldName,
           outStatisticFieldName: "agg_count"
         }]);
         const queryUrl = inputUrl + "/query?where=" + encodeURIComponent("1=1") +
@@ -980,21 +995,23 @@
           // Build a lookup keyed by the common fields between aggregation results
           // and the linked layer. Filter by selected field value if applicable,
           // then sum counts using the common fields as composite keys.
-          // E.g., "floor" agg results summed per campus+building to join with
-          // building layer; "campus" agg results joined to building layer by campus.
+          // Note: aggregation response attributes use prefixed field names
+          // (e.g., "---geo_hash---.geohash_campus.campus"), so we read using the prefix.
           const aggLookup = {};
           let maxCount = 0;
           array.forEach(aggFeatures, function (f) {
             // If a specific field value is selected for a non-direct-apply field,
             // only include aggregation results matching that value
             if (!directApply && selectedFieldValue) {
-              const val = f.attributes[fieldName];
+              const prefixedFieldName = aggTypePrefix + "." + fieldName;
+              const val = f.attributes[prefixedFieldName];
               if (String(val) !== String(selectedFieldValue)) return;
             }
-            // Build a composite key from the common fields
+            // Build a composite key from the common fields (using prefixed names)
             const keyParts = [];
             array.forEach(commonFields, function (cf) {
-              keyParts.push(f.attributes[cf] || "");
+              const prefixedCf = aggTypePrefix + "." + cf;
+              keyParts.push(f.attributes[prefixedCf] || "");
             });
             const key = keyParts.join("|");
             const count = f.attributes["agg_count"] || 0;
