@@ -1707,6 +1707,17 @@
         const sr = new SpatialReference(parseInt(outputSR));
         const mapSR = new SpatialReference(_map.spatialReference.wkid);
 
+        // Remove polygonal aggregation result layer if it exists
+        const polyAggLayer = _map.getLayer("polyAggResult");
+        if (polyAggLayer) {
+          _map.removeLayer(polyAggLayer);
+        }
+
+        // Re-create the aggregations layer if it was removed (e.g., by polygonal aggregation)
+        if (!_map.getLayer("aggregations")) {
+          addAggregationsLayer();
+        }
+
         const url = buildQueryUrlFromUI();
         const request = esriRequest({
           "url": url,
