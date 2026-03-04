@@ -63,6 +63,7 @@
       "esri/IdentityManager",
 
       "esri/layers/FeatureLayer",
+      "esri/layers/GraphicsLayer",
       "esri/layers/LabelClass",
       "esri/layers/ArcGISDynamicMapServiceLayer",
       "esri/layers/ArcGISTiledMapServiceLayer",
@@ -90,7 +91,7 @@
       parser, dom, domStyle, domClass, on, JSON, array, domQuery, number,
       Map, Graphic, SpatialReference, Color, esriRequest, webMercatorUtils, Extent, GeometryService, InfoTemplate, TimeExtent, graphicsUtils,
       IdentityManager,
-      FeatureLayer, LabelClass, ArcGISDynamicMapServiceLayer, ArcGISTiledMapServiceLayer,
+      FeatureLayer, GraphicsLayer, LabelClass, ArcGISDynamicMapServiceLayer, ArcGISTiledMapServiceLayer,
       SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
       TimeSlider,
       HeatmapRenderer, ClassBreaksRenderer,
@@ -841,10 +842,14 @@
               _map.removeLayer(existingAggLayer);
             }
 
-            // Remove previous polygonal aggregation result layer if it exists
+            // Remove previous polygonal aggregation result layer and its labels if they exist
             const prevResultLayer = _map.getLayer("polyAggResult");
             if (prevResultLayer) {
               _map.removeLayer(prevResultLayer);
+            }
+            const prevPolyAggLabels = _map.getLayer("polyAggLabels");
+            if (prevPolyAggLabels) {
+              _map.removeLayer(prevPolyAggLabels);
             }
 
             // Create field definitions for the result layer (use clean field names)
@@ -907,24 +912,39 @@
               resultLayer.setRenderer(renderer);
             }
 
-            // Add labels showing the count on each polygon
-            const labelTextSymbol = new TextSymbol().setColor(new Color([0, 0, 0, 1]));
-            labelTextSymbol.font.setSize("10pt");
-            labelTextSymbol.font.setWeight("bold");
-            const polyAggLabelJson = {
-              "labelExpressionInfo": { "value": "{" + cleanCountFieldName + "}" },
-              "labelPlacement": "always-horizontal"
-            };
-            const polyAggLabelClass = new LabelClass(polyAggLabelJson);
-            polyAggLabelClass.symbol = labelTextSymbol;
-            resultLayer.setLabelingInfo([polyAggLabelClass]);
-
             _map.addLayer(resultLayer);
+
+            // Remove previous polyAgg labels layer if it exists
+            const prevLabelsLayer = _map.getLayer("polyAggLabels");
+            if (prevLabelsLayer) {
+              _map.removeLayer(prevLabelsLayer);
+            }
 
             resultLayer.on("load", function () {
               resultLayer.applyEdits(graphics, null, null).then(function () {
                 resultLayer.refresh();
                 console.log("Polygonal aggregation result layer added: " + graphics.length + " polygon features.");
+
+                // Use GeometryService.labelPoints to compute interior label points for all polygons
+                var geometries = array.map(graphics, function (g) { return g.geometry; });
+                if (geometries.length > 0 && geometries[0].rings.length > 0) {
+                  _gs.labelPoints(geometries).then(function (labelPts) {
+                    var polyAggLabelsLayer = new GraphicsLayer({ id: "polyAggLabels" });
+                    array.forEach(labelPts, function (labelPoint, i) {
+                      if (!labelPoint) return;
+                      var count = graphics[i].attributes ? graphics[i].attributes[cleanCountFieldName] : "";
+                      if (count === null || count === undefined) return;
+                      var textSymbol = new TextSymbol(String(count));
+                      textSymbol.setColor(new Color([0, 0, 0, 1]));
+                      textSymbol.font.setSize("10pt");
+                      textSymbol.font.setWeight("bold");
+                      textSymbol.setHaloColor(new Color([255, 255, 255, 0.7]));
+                      textSymbol.setHaloSize(1);
+                      polyAggLabelsLayer.add(new Graphic(labelPoint, textSymbol));
+                    });
+                    _map.addLayer(polyAggLabelsLayer);
+                  });
+                }
 
                 // Schedule auto-refresh if enabled
                 if (dojo.byId("polyAggAutoRefresh").checked) {
@@ -1707,10 +1727,14 @@
         const sr = new SpatialReference(parseInt(outputSR));
         const mapSR = new SpatialReference(_map.spatialReference.wkid);
 
-        // Remove polygonal aggregation result layer if it exists
+        // Remove polygonal aggregation result layer and its labels if they exist
         const polyAggLayer = _map.getLayer("polyAggResult");
         if (polyAggLayer) {
           _map.removeLayer(polyAggLayer);
+        }
+        const polyAggLabels = _map.getLayer("polyAggLabels");
+        if (polyAggLabels) {
+          _map.removeLayer(polyAggLabels);
         }
 
         // Re-create the aggregations layer if it was removed (e.g., by polygonal aggregation)
