@@ -116,6 +116,8 @@
       let _cachedLinkedFeatures = null;
       let _polyAggAutoRefresh = false;
       let _polyAggRefreshInterval = null;
+      let _lodAutoRefresh = false;
+      let _lodRefreshInterval = null;
       
       // ### Spatial Reference variables ###
       // These variables manage coordinate system transformations and spatial reference handling
@@ -258,6 +260,15 @@
         if (!this.checked) {
           clearTimeout(_polyAggRefreshInterval);
           _polyAggAutoRefresh = false;
+        }
+      });
+      on(dojo.byId("lodAutoRefresh"), "change", function () {
+        if (!this.checked) {
+          clearTimeout(_lodRefreshInterval);
+          _lodAutoRefresh = false;
+        } else {
+          _lodAutoRefresh = true;
+          updateLayerFromUIChange();
         }
       });
       on(dojo.byId("aggLabelsToggle"), "click", createSectionToggle("aggLabelsMainSection", "aggLabelsToggle", aggLabelsVisibility));
@@ -1910,6 +1921,14 @@
                 _map.setExtent(layerExtent.expand(1.0));
             }
             selectedLayer.refresh();
+
+            // Schedule LOD auto-refresh if enabled
+            if (dojo.byId("lodAutoRefresh").checked) {
+              _lodAutoRefresh = true;
+              var intervalSec = parseFloat(dojo.byId("lodRefreshInterval").value) || 5;
+              clearTimeout(_lodRefreshInterval);
+              _lodRefreshInterval = setTimeout(updateLayerFromUIChange, intervalSec * 1000);
+            }
           });
       }
 
@@ -2170,7 +2189,7 @@
         </div>
         <div class="input-row" style="display:flex; align-items:center;">
           <input type="checkbox" id="polyAggAutoRefresh" />
-          <label for="polyAggAutoRefresh" style="margin-right:10px;">Auto Refresh</label>
+          <label for="polyAggAutoRefresh" style="margin-right:10px;">Auto refresh</label>
           <input type="number" id="polyAggRefreshInterval" value="5" style="width:50px;" />
           <label for="polyAggRefreshInterval">sec</label>
         </div>
@@ -2180,7 +2199,7 @@
     <!-- [Section 2] Aggregation Settings -->
     <section id="aggSettingsSection">
       <div class="config-header">
-        <h2>Aggregation Settings</h2>
+        <h2>LOD Aggregation Settings</h2>
         <div class="header-actions-group">
           <a href="#" id="aggSettingsToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
@@ -2197,13 +2216,19 @@
             checked="true"
             title="Auto Offset LOD based on the LOD type:&#10;• GeoHash: 0&#10;• Geotile: 5&#10;• H3: 0&#10;• Square: 5&#10;• Flat Hexagon: 5&#10;• Pointy Hexagon: 5&#10;• Flat Triangle: 4&#10;• Pointy Triangle: 4"/>
         </div>
+        <div class="input-row" style="display:flex; align-items:center;">
+          <input type="checkbox" id="lodAutoRefresh" />
+          <label for="lodAutoRefresh" style="margin-right:10px;">Auto refresh</label>
+          <input type="number" id="lodRefreshInterval" value="5" style="width:50px;" />
+          <label for="lodRefreshInterval">sec</label>
+        </div>
       </div>
     </section>
 
     <!-- [Section 3] Aggregation Style -->
     <section id="aggStyleSection">
       <div class="config-header">
-        <h2>Aggregation Style</h2>
+        <h2>LOD Aggregation Style</h2>
         <div class="header-actions-group">
           <a href="#" id="aggStyleToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
@@ -2255,7 +2280,7 @@
     <!-- [Section 4] Aggregation Bins Section -->
     <section id="aggBinsSection">
       <div class="config-header">
-        <h2>Aggregation Bins</h2>
+        <h2>LOD Aggregation Bins</h2>
         <div class="header-actions-group">
           <input type="checkbox" id="useAggregationRenderer" title="Use Aggregation Renderer"/>
           <a href="#" id="aggBinsToggle"><i class="fa fa-chevron-up"></i></a>
@@ -2341,7 +2366,7 @@
     <!-- [Section 5] Aggregation Labels Section -->
     <section id="aggLabelsMainSection">
       <div class="config-header">
-        <h2>Aggregation Labels</h2>
+        <h2>LOD Aggregation Labels</h2>
         <div class="header-actions-group">
           <input type="checkbox" id="renderLabels" checked="true" title="Render Labels"/>
           <a href="#" id="aggLabelsToggle"><i class="fa fa-chevron-up"></i></a>
