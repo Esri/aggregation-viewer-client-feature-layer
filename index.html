@@ -945,7 +945,7 @@
                       if (!labelPoint) return;
                       var count = graphics[i].attributes ? graphics[i].attributes[cleanCountFieldName] : "";
                       if (count === null || count === undefined) return;
-                      var textSymbol = new TextSymbol(String(count));
+                      var textSymbol = new TextSymbol(number.format(count, { places: 0 }));
                       textSymbol.setColor(new Color([0, 0, 0, 1]));
                       textSymbol.font.setSize("10pt");
                       textSymbol.font.setWeight("bold");
