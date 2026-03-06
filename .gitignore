@@ -1,5 +1,8 @@
 # IntelliJ IDEA
 .idea/
+.claude/
+hls-viewer/
+aggregation-viewer-client-feature-layer2.iml
 
 # VS Code
 .vscode/
