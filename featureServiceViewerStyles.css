@@ -114,7 +114,7 @@ body {
 #video-player-panel {
     bottom: 10px;
     left: 340px;
-    width: 420px;
+    width: 315px;
     transition: left 300ms ease;
 }
 
@@ -173,7 +173,7 @@ body {
 #features-panel {
     bottom: 10px;
     left: 770px;
-    width: 480px;
+    width: 360px;
     transition: left 300ms ease;
 }
 
@@ -187,7 +187,7 @@ body {
 }
 
 #features-table-wrapper {
-    max-height: 40vh;
+    max-height: 30vh;
     overflow: auto;
 }
 

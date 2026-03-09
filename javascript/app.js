@@ -425,7 +425,6 @@
         const lodTypeSelect = dojo.byId("lodType");
         const lodSelect = dojo.byId("lod");
         const selectedType = lodTypeSelect.value;
-        const previousLod = lodSelect.value;
 
         // Find the matching lodInfo for the selected type
         var matchingInfo = null;
@@ -451,14 +450,9 @@
           lodSelect.appendChild(opt);
         }
 
-        // Restore previous selection if in range, otherwise pick a sensible default
-        var prevInt = parseInt(previousLod);
-        if (!isNaN(prevInt) && prevInt >= min && prevInt <= max) {
-          lodSelect.value = previousLod;
-        } else {
-          // Default to 3 if in range, otherwise min
-          lodSelect.value = (3 >= min && 3 <= max) ? "3" : String(min);
-        }
+        // Default to the midpoint of the allowed level range
+        var midLevel = Math.round((min + max) / 2);
+        lodSelect.value = String(midLevel);
       }
 
       /**
@@ -2222,6 +2216,41 @@
       //
       // Returns a Deferred that resolves to the JSON response (with .features array)
       // ------------------------------------------------------------------
+      // All features retrieved by the most recent queryFeatures call
+      var allFeatures = [];
+
+      function renderFeatures(features) {
+        // Open the Video Metadata panel if it is hidden
+        var panel = document.getElementById("features-panel");
+        if (panel && panel.classList.contains("section-hidden")) {
+          panel.classList.remove("section-hidden");
+          var toggle = document.getElementById("featuresToggle");
+          if (toggle) {
+            var icon = toggle.querySelector("i");
+            if (icon) icon.className = "fa fa-chevron-up";
+          }
+        }
+
+        var tbody = document.getElementById("features-table-body");
+        var countEl = document.getElementById("features-count");
+        if (tbody) {
+          tbody.innerHTML = "";
+          features.forEach(function (f) {
+            var a = f.attributes || {};
+            var tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td>" + (a.object_class || "") + "</td>" +
+              "<td>" + (a.track_id != null ? a.track_id : "") + "</td>" +
+              "<td>" + (a.confidence_score != null ? Number(a.confidence_score).toFixed(2) : "") + "</td>" +
+              "<td>" + (a.depth_m != null ? Number(a.depth_m).toFixed(1) : "") + "</td>";
+            tbody.appendChild(tr);
+          });
+        }
+        if (countEl) {
+          countEl.innerText = features.length + " features";
+        }
+      }
+
       function queryFeatures(featureServiceUrl, frameImageSubstring) {
         const outFields = [
           'camera_id', 'frame_id', 'frame_image', 'track_id',
@@ -2240,54 +2269,129 @@
           tokenParam = "&token=" + credential.token;
         }
 
-        const url = featureServiceUrl + "/query"
-          + "?where=" + encodeURIComponent(where)
-          + "&outFields=" + encodeURIComponent(outFields)
-          + "&returnGeometry=false"
-          + "&orderByFields=" + encodeURIComponent("frame_image ASC")
-          + "&f=json"
-          + tokenParam;
+        // Reset for the new query
+        allFeatures = [];
 
-        console.log("queryFeatures URL:", url);
+        function fetchPage(resultOffset) {
+          var url = featureServiceUrl + "/query"
+            + "?where=" + encodeURIComponent(where)
+            + "&outFields=" + encodeURIComponent(outFields)
+            + "&returnGeometry=false"
+            + "&orderByFields=" + encodeURIComponent("frame_image ASC")
+            + "&resultOffset=" + resultOffset
+            + "&f=json"
+            + tokenParam;
 
-        const request = esriRequest({
-          url: url,
-          handleAs: "json",
-          callbackParamName: "callback"
-        });
+          console.log("queryFeatures URL (offset=" + resultOffset + "):", url);
 
-        request.then(
-          function (response) {
-            console.log("queryFeatures response:", response);
-            var features = Array.isArray(response.features) ? response.features : [];
-            var tbody = document.getElementById("features-table-body");
-            var countEl = document.getElementById("features-count");
-            if (tbody) {
-              tbody.innerHTML = "";
-              features.forEach(function (f) {
-                var a = f.attributes || {};
-                var tr = document.createElement("tr");
-                tr.innerHTML =
-                  "<td>" + (a.object_class || "") + "</td>" +
-                  "<td>" + (a.track_id != null ? a.track_id : "") + "</td>" +
-                  "<td>" + (a.confidence_score != null ? Number(a.confidence_score).toFixed(2) : "") + "</td>" +
-                  "<td>" + (a.depth_m != null ? Number(a.depth_m).toFixed(1) : "") + "</td>";
-                tbody.appendChild(tr);
-              });
+          var request = esriRequest({
+            url: url,
+            handleAs: "json",
+            callbackParamName: "callback"
+          });
+
+          request.then(
+            function (response) {
+              console.log("queryFeatures response (offset=" + resultOffset + "):", response);
+              var features = Array.isArray(response.features) ? response.features : [];
+              allFeatures = allFeatures.concat(features);
+
+              if (response.exceededTransferLimit === true) {
+                fetchPage(allFeatures.length);
+              } else {
+                console.log("queryFeatures complete: " + allFeatures.length + " features loaded");
+              }
+            },
+            function (error) {
+              console.error("queryFeatures error:", error);
             }
-            if (countEl) {
-              countEl.innerText = features.length + " features";
-            }
-          },
-          function (error) {
-            console.error("queryFeatures error:", error);
-          }
-        );
+          );
 
-        return request;
+          return request;
+        }
+
+        return fetchPage(0);
       }
 
-      // Expose queryFeatures to global scope for media-player.js
+      // Return all features from the most recent query
+      function getAllFeatures() {
+        return allFeatures;
+      }
+
+      // Filter features by a predicate function and render the subset.
+      // predicate receives each feature object; return true to include.
+      // Example: filterFeatures(function(f) { return f.attributes.object_class === 'car'; })
+      function filterFeatures(predicate) {
+        var subset = allFeatures.filter(predicate);
+        renderFeatures(subset);
+        return subset;
+      }
+
+      // Select features by index range (e.g. "100:120" returns indices 100–119).
+      // Renders the subset and returns it.
+      function selectFeaturesByRange(rangeStr) {
+        var parts = rangeStr.split(':');
+        var start = parseInt(parts[0], 10) || 0;
+        var end = parts.length > 1 ? parseInt(parts[1], 10) : allFeatures.length;
+        if (start < 0) start = 0;
+        if (end > allFeatures.length) end = allFeatures.length;
+        var subset = allFeatures.slice(start, end);
+        renderFeatures(subset);
+        return subset;
+      }
+
+      // Clear the features table and update the count display
+      function clearFeaturesTable() {
+        var tbody = document.getElementById("features-table-body");
+        var countEl = document.getElementById("features-count");
+        if (tbody) tbody.innerHTML = "";
+        if (countEl) countEl.innerText = "0 features";
+      }
+
+      // Append a single feature row (by allFeatures index) to the bottom
+      // of the table and scroll it into view.
+      function appendFeature(index) {
+        if (index < 0 || index >= allFeatures.length) return;
+        var f = allFeatures[index];
+        var a = f.attributes || {};
+        var tbody = document.getElementById("features-table-body");
+        var countEl = document.getElementById("features-count");
+        if (!tbody) return;
+
+        // Open the Video Metadata panel if hidden
+        var panel = document.getElementById("features-panel");
+        if (panel && panel.classList.contains("section-hidden")) {
+          panel.classList.remove("section-hidden");
+          var toggle = document.getElementById("featuresToggle");
+          if (toggle) {
+            var icon = toggle.querySelector("i");
+            if (icon) icon.className = "fa fa-chevron-up";
+          }
+        }
+
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + (a.object_class || "") + "</td>" +
+          "<td>" + (a.track_id != null ? a.track_id : "") + "</td>" +
+          "<td>" + (a.confidence_score != null ? Number(a.confidence_score).toFixed(2) : "") + "</td>" +
+          "<td>" + (a.depth_m != null ? Number(a.depth_m).toFixed(1) : "") + "</td>";
+        tbody.appendChild(tr);
+
+        // Scroll the new row into view
+        tr.scrollIntoView({ behavior: "smooth", block: "end" });
+
+        if (countEl) {
+          countEl.innerText = tbody.rows.length + " features";
+        }
+      }
+
+      // Expose to global scope for media-player.js
       window.queryFeatures = queryFeatures;
+      window.getAllFeatures = getAllFeatures;
+      window.filterFeatures = filterFeatures;
+      window.selectFeaturesByRange = selectFeaturesByRange;
+      window.clearFeaturesTable = clearFeaturesTable;
+      window.appendFeature = appendFeature;
+      window.renderAllFeatures = function () { renderFeatures(allFeatures); };
 
     });

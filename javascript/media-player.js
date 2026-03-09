@@ -18,6 +18,14 @@
 
   let hls = null;
 
+  let feature_layer_url = 'https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_0225_1205_PolyAgg7/FeatureServer/0'
+
+  // Video-to-feature sync parameters
+  var videoSegmentLength = 6;   // seconds per .ts segment
+  var framesPerSecond = 15;     // detection frames per second
+  var videoPlaySpeed = 1;       // video playback speed multiplier (e.g. 2 = 2x faster)
+  var metadataRollDelay = 1;    // seconds to wait before starting metadata rolling (gives video time to load)
+
   // ------------------------------------------------------------------
   // Panel toggle helpers
   // ------------------------------------------------------------------
@@ -38,7 +46,7 @@
       if (videoPlayerPanel.classList.contains('section-hidden')) {
         featuresLeft = videoLeft + videoPlayerPanel.offsetWidth + 10;
       } else {
-        featuresLeft = videoLeft + 430;
+        featuresLeft = videoLeft + 325;
       }
       featuresPanel.style.left = featuresLeft + 'px';
     }
@@ -66,6 +74,91 @@
 
   // Set initial positions based on collapsed states
   setTimeout(updatePanelPositions, 0);
+
+  // Timer ID for the rolling feature display so we can cancel on new segment
+  var featureRollTimer = null;
+
+  // ------------------------------------------------------------------
+  // selectFeaturesForSegment — sync video segment to feature display
+  // Extracts segment number from key (e.g. "segment00011.ts" → 11),
+  // then progressively rolls through features in sync with the video.
+  // ------------------------------------------------------------------
+  // State for the rolling display so pause/resume can continue where it left off
+  var rollState = null;  // { start, end, currentIndex, baseIntervalMs }
+
+  function selectFeaturesForSegment(key) {
+    // Cancel any previous rolling display
+    stopFeatureRoll();
+
+    var segMatch = key.match(/segment(\d+)\.ts$/);
+    if (!segMatch || !window.appendFeature) return;
+
+    var segNum = parseInt(segMatch[1], 10);
+    var featuresPerSegment = videoSegmentLength * framesPerSecond;
+    var start = segNum * featuresPerSegment;
+    var end = start + featuresPerSegment;
+    console.log("Segment " + segNum + ": rolling features " + start + ":" + end);
+
+    // Clear table and start fresh for this segment
+    if (window.clearFeaturesTable) window.clearFeaturesTable();
+
+    // Base interval between each feature row (ms) at 1x speed
+    var baseIntervalMs = (videoSegmentLength / (end - start)) * 1000;
+
+    rollState = {
+      start: start,
+      end: end,
+      currentIndex: start,
+      baseIntervalMs: baseIntervalMs
+    };
+
+    // Delay the start of rolling to give the video player time to load
+    featureRollTimer = setTimeout(function () {
+      if (!rollState) return;
+      window.appendFeature(rollState.currentIndex);
+      rollState.currentIndex++;
+      scheduleNextFeature();
+    }, metadataRollDelay * 1000);
+  }
+
+  function scheduleNextFeature() {
+    if (!rollState || rollState.currentIndex >= rollState.end) {
+      featureRollTimer = null;
+      return;
+    }
+    // Adjust interval by the videoPlaySpeed multiplier
+    var adjustedMs = rollState.baseIntervalMs / videoPlaySpeed;
+
+    featureRollTimer = setTimeout(function () {
+      if (!rollState || rollState.currentIndex >= rollState.end) {
+        featureRollTimer = null;
+        return;
+      }
+      window.appendFeature(rollState.currentIndex);
+      rollState.currentIndex++;
+      scheduleNextFeature();
+    }, adjustedMs);
+  }
+
+  function stopFeatureRoll() {
+    if (featureRollTimer) {
+      clearTimeout(featureRollTimer);
+      featureRollTimer = null;
+    }
+  }
+
+  // Pause rolling when video is paused; resume when played
+  if (video) {
+    video.addEventListener('pause', function () {
+      stopFeatureRoll();
+    });
+    video.addEventListener('play', function () {
+      // Resume rolling if there are remaining features
+      if (rollState && rollState.currentIndex < rollState.end && !featureRollTimer) {
+        scheduleNextFeature();
+      }
+    });
+  }
 
   // ------------------------------------------------------------------
   // resetUI — ported from hls-viewer resetUI()
@@ -103,6 +196,15 @@
 
       container.setAttribute('data-loaded', 'true');
       container.style.display = 'block';
+
+      // When prefix matches media-store/video-hls/<camera-id>/<date>/<hour>/,
+      // query the feature layer for detections in that date/hour.
+      const hourLevelMatch = prefix.match(/^media-store\/video-hls\/[^/]+\/([^/]+\/[^/]+)\/$/);
+      if (hourLevelMatch && window.queryFeatures) {
+        const frameImageSubstring = hourLevelMatch[1] + "-";
+        console.log("Hour-level folder detected, querying features with:", frameImageSubstring);
+        window.queryFeatures(feature_layer_url, frameImageSubstring);
+      }
 
     } catch (e) {
       console.error("Failed to load tree level:", e);
@@ -194,6 +296,7 @@
         }
       } else if (name.endsWith('.ts')) {
         resetUI(name, key, "video-badge video-badge-segment", "Playing Single Segment");
+        selectFeaturesForSegment(key);
         if (Hls.isSupported()) {
           const dummyManifest = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:6.0,\n" + videoUrl + "\n#EXT-X-ENDLIST";
           hls = new Hls();
@@ -244,6 +347,7 @@
 
         if (name.endsWith('.ts')) {
           resetUI(name, key, "video-badge video-badge-segment", "Playing Single Segment");
+          selectFeaturesForSegment(key);
           if (Hls.isSupported()) {
             const dummyManifest = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:6.0,\n" + videoUrl + "\n#EXT-X-ENDLIST";
             hls = new Hls();
@@ -287,12 +391,12 @@
     }
 
     // Test: query features using window.queryFeatures (defined in app.js via esriRequest)
-    if (window.queryFeatures) {
-      window.queryFeatures(
-        'https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_0225_1205_PolyAgg7/FeatureServer/0',
-        '/2026-03-05/22'
-      ).then(data => console.log(data.features));
-    }
+    // if (window.queryFeatures) {
+    //   window.queryFeatures(
+    //     'https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_0225_1205_PolyAgg7/FeatureServer/0',
+    //     '/2026-03-05/22'
+    //   ).then(data => console.log(data.features));
+    // }
   }
 
   init();
