@@ -18,7 +18,19 @@
 
   let hls = null;
 
-  let feature_layer_url = 'https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_0225_1205_PolyAgg7/FeatureServer/0'
+  // Lookup table: feature layer URL by camera_id and date
+  // Key format: "<camera_id>/<date>"
+  var featureLayerLookup = {
+    "CalTrans-Camera-276/2026-03-05": "https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_0225_1205_PolyAgg7/FeatureServer/0"
+  };
+
+  // Resolve feature layer URL from a prefix like media-store/video-hls/<camera-id>/<date>/<hour>/
+  function getFeatureLayerUrl(prefix) {
+    var match = prefix.match(/^media-store\/video-hls\/([^/]+)\/([^/]+)\//);
+    if (!match) return null;
+    var key = match[1] + "/" + match[2];
+    return featureLayerLookup[key] || null;
+  }
 
   // Video-to-feature sync parameters
   var videoSegmentLength = 6;   // seconds per .ts segment
@@ -200,10 +212,11 @@
       // When prefix matches media-store/video-hls/<camera-id>/<date>/<hour>/,
       // query the feature layer for detections in that date/hour.
       const hourLevelMatch = prefix.match(/^media-store\/video-hls\/[^/]+\/([^/]+\/[^/]+)\/$/);
-      if (hourLevelMatch && window.queryFeatures) {
+      const resolvedLayerUrl = getFeatureLayerUrl(prefix);
+      if (hourLevelMatch && resolvedLayerUrl && window.queryFeatures) {
         const frameImageSubstring = hourLevelMatch[1] + "-";
         console.log("Hour-level folder detected, querying features with:", frameImageSubstring);
-        window.queryFeatures(feature_layer_url, frameImageSubstring);
+        window.queryFeatures(resolvedLayerUrl, frameImageSubstring);
       }
 
     } catch (e) {
