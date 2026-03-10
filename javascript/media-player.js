@@ -279,6 +279,17 @@
   async function playFile(key, name) {
     if (hls) { hls.destroy(); hls = null; }
 
+    // Open the Video Player panel if it is hidden
+    if (videoPlayerPanel && videoPlayerPanel.classList.contains('section-hidden')) {
+      videoPlayerPanel.classList.remove('section-hidden');
+      var vpToggle = document.getElementById('videoPlayerToggle');
+      if (vpToggle) {
+        var vpIcon = vpToggle.querySelector('i');
+        if (vpIcon) vpIcon.className = 'fa fa-chevron-up';
+      }
+      updatePanelPositions();
+    }
+
     // --- CloudFront mode: build URL directly, no signing needed ---
     if (cloudfrontUrl) {
       const videoUrl = cloudfrontUrl + '/' + key;
