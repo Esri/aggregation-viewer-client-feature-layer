@@ -2385,13 +2385,119 @@
         }
       }
 
+      // Query features for a specific time range (timestamp + duration).
+      // Uses ISO timestamp strings to query the "timestamp" field on the feature layer.
+      // Returns a Promise that resolves with an array of features.
+      function queryFeaturesForTimeRange(featureServiceUrl, timestamp, durationSec) {
+        var endDate = new Date(new Date(timestamp).getTime() + parseFloat(durationSec) * 1000);
+        var endTimestamp = endDate.toISOString();
+
+        var where = "timestamp >= '" + timestamp + "' AND timestamp < '" + endTimestamp + "'";
+
+        var outFields = [
+          'camera_id', 'frame_id', 'frame_image', 'track_id',
+          'object_class', 'bbox_x1', 'bbox_y1', 'bbox_x2', 'bbox_y2',
+          'confidence_score', 'depth_m', 'pts_ms', 'depth_raw_m',
+          'geo_confidence', 'geometry_json', 'timestamp'
+        ].join(',');
+
+        var tokenParam = "";
+        var credential = IdentityManager.findCredential(featureServiceUrl);
+        if (credential && credential.token) {
+          tokenParam = "&token=" + credential.token;
+        }
+
+        var collectedFeatures = [];
+
+        return new Promise(function(resolve, reject) {
+          function fetchPage(resultOffset) {
+            var url = featureServiceUrl + "/query"
+              + "?where=" + encodeURIComponent(where)
+              + "&outFields=" + encodeURIComponent(outFields)
+              + "&returnGeometry=false"
+              + "&orderByFields=" + encodeURIComponent("timestamp ASC")
+              + "&resultOffset=" + resultOffset
+              + "&f=json"
+              + tokenParam;
+
+            console.log("queryFeaturesForTimeRange URL (offset=" + resultOffset + "):", url);
+
+            esriRequest({
+              url: url,
+              handleAs: "json",
+              callbackParamName: "callback"
+            }).then(
+              function(response) {
+                var features = Array.isArray(response.features) ? response.features : [];
+                collectedFeatures = collectedFeatures.concat(features);
+                if (response.exceededTransferLimit === true) {
+                  fetchPage(collectedFeatures.length);
+                } else {
+                  console.log("queryFeaturesForTimeRange complete: " + collectedFeatures.length + " features");
+                  resolve(collectedFeatures);
+                }
+              },
+              function(error) {
+                console.error("queryFeaturesForTimeRange error:", error);
+                reject(error);
+              }
+            );
+          }
+          fetchPage(0);
+        });
+      }
+
+      // Append one or more feature objects to the features table.
+      // Accepts a single feature or an array of features.
+      function appendFeatureRow(features) {
+        var list = Array.isArray(features) ? features : [features];
+        if (list.length === 0) return;
+
+        var tbody = document.getElementById("features-table-body");
+        var countEl = document.getElementById("features-count");
+        if (!tbody) return;
+
+        // Open the Video Metadata panel if hidden
+        var panel = document.getElementById("features-panel");
+        if (panel && panel.classList.contains("section-hidden")) {
+          panel.classList.remove("section-hidden");
+          var toggle = document.getElementById("featuresToggle");
+          if (toggle) {
+            var icon = toggle.querySelector("i");
+            if (icon) icon.className = "fa fa-chevron-up";
+          }
+        }
+
+        var lastTr;
+        for (var i = 0; i < list.length; i++) {
+          var a = list[i].attributes || {};
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + (a.object_class || "") + "</td>" +
+            "<td>" + (a.track_id != null ? a.track_id : "") + "</td>" +
+            "<td>" + (a.confidence_score != null ? Number(a.confidence_score).toFixed(2) : "") + "</td>" +
+            "<td>" + (a.depth_m != null ? Number(a.depth_m).toFixed(1) : "") + "</td>";
+          tbody.appendChild(tr);
+          lastTr = tr;
+        }
+
+        // Scroll only the last row into view
+        if (lastTr) lastTr.scrollIntoView({ behavior: "smooth", block: "end" });
+
+        if (countEl) {
+          countEl.innerText = tbody.rows.length + " features";
+        }
+      }
+
       // Expose to global scope for media-player.js
       window.queryFeatures = queryFeatures;
+      window.queryFeaturesForTimeRange = queryFeaturesForTimeRange;
       window.getAllFeatures = getAllFeatures;
       window.filterFeatures = filterFeatures;
       window.selectFeaturesByRange = selectFeaturesByRange;
       window.clearFeaturesTable = clearFeaturesTable;
       window.appendFeature = appendFeature;
+      window.appendFeatureRow = appendFeatureRow;
       window.renderAllFeatures = function () { renderFeatures(allFeatures); };
 
     });

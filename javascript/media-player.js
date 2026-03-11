@@ -18,10 +18,22 @@
 
   let hls = null;
 
+  // Segment metadata: maps segment name (e.g. "segment00000") to [timestamp, segment, duration]
+  let segmentTriplets = {};
+  // Feature layer URL resolved for the current hour-level folder
+  let currentFeatureLayerUrl = null;
+
+  // LRU cache for queried features: up to 10 segments
+  const FEATURE_CACHE_MAX = 10;
+  let featureCacheKeys = [];   // ordered from oldest to newest
+  let featureCache = {};       // segment name → features array
+
+  // TODO: we need to read the feature layer lookup table from a datastore!
   // Lookup table: feature layer URL by camera_id and date
   // Key format: "<camera_id>/<date>"
-  var featureLayerLookup = {
-    "CalTrans-Camera-276/2026-03-05": "https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_0225_1205_PolyAgg7/FeatureServer/0"
+  const featureLayerLookup = {
+    "CalTrans-Camera-276/2026-03-11":
+        "https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_03112026_20237_PolyAgg/FeatureServer/0"
   };
 
   // Resolve feature layer URL from a prefix like media-store/video-hls/<camera-id>/<date>/<hour>/
@@ -32,9 +44,28 @@
     return featureLayerLookup[key] || null;
   }
 
+  // Parse an HLS playlist response into a list of [timestamp, segment, duration] triplets.
+  // Skips the first 4 lines (header), then processes every 3 lines as one triplet.
+  function parsePlaylist(text) {
+    const lines = text.split('\n').filter(l => l.trim() !== '');
+    const triplets = [];
+    for (let i = 4; i + 2 < lines.length; i += 3) {
+      const timestampLine = lines[i];     // #EXT-X-PROGRAM-DATE-TIME:...
+      const durationLine  = lines[i + 1]; // #EXTINF:6.000000,
+      const urlLine       = lines[i + 2]; // https://...segmentNNNNN.ts?...
+
+      const timestamp = timestampLine.replace('#EXT-X-PROGRAM-DATE-TIME:', '');
+      const duration  = durationLine.replace('#EXTINF:', '').replace(',', '');
+      const segmentMatch = urlLine.match(/\/(segment\d+)\.ts/);
+      const segment = segmentMatch ? segmentMatch[1] : urlLine;
+
+      triplets.push([timestamp, segment, duration]);
+    }
+    return triplets;
+  }
+
   // Video-to-feature sync parameters
-  var videoSegmentLength = 6;   // seconds per .ts segment
-  var framesPerSecond = 15;     // detection frames per second
+  var videoSegmentLength = 6;   // seconds per .ts segment// detection frames per second
   var videoPlaySpeed = 1;       // video playback speed multiplier (e.g. 2 = 2x faster)
   var metadataRollDelay = 1;    // seconds to wait before starting metadata rolling (gives video time to load)
 
@@ -102,35 +133,93 @@
     // Cancel any previous rolling display
     stopFeatureRoll();
 
-    var segMatch = key.match(/segment(\d+)\.ts$/);
-    if (!segMatch || !window.appendFeature) return;
+    var segMatch = key.match(/(segment\d+)\.ts$/);
+    if (!segMatch) return;
 
-    var segNum = parseInt(segMatch[1], 10);
-    var featuresPerSegment = videoSegmentLength * framesPerSecond;
-    var start = segNum * featuresPerSegment;
-    var end = start + featuresPerSegment;
-    console.log("Segment " + segNum + ": rolling features " + start + ":" + end);
+    var segName = segMatch[1];
+    var triplet = segmentTriplets[segName];
+    if (!triplet) {
+      console.warn("No triplet found for segment:", segName);
+      return;
+    }
+
+    var timestamp = triplet[0];
+    var duration = triplet[2];
+    console.log("Segment " + segName + ": querying features for timestamp=" + timestamp + ", duration=" + duration);
 
     // Clear table and start fresh for this segment
     if (window.clearFeaturesTable) window.clearFeaturesTable();
 
-    // Base interval between each feature row (ms) at 1x speed
-    var baseIntervalMs = (videoSegmentLength / (end - start)) * 1000;
+    if (!currentFeatureLayerUrl || !window.queryFeaturesForTimeRange) {
+      console.warn("No feature layer URL or queryFeaturesForTimeRange not available");
+      return;
+    }
+
+    // Check cache first
+    if (featureCache[segName]) {
+      console.log("Cache hit for segment " + segName + ": " + featureCache[segName].length + " features");
+      startFeatureRoll(featureCache[segName], duration);
+      return;
+    }
+
+    // Query features on-demand for this segment's time range
+    window.queryFeaturesForTimeRange(currentFeatureLayerUrl, timestamp, duration)
+      .then(function (features) {
+        if (!features || features.length === 0) {
+          console.log("No features found for segment " + segName);
+          return;
+        }
+        console.log("Fetched " + features.length + " features for segment " + segName);
+
+        // Cache the result; evict oldest if at capacity
+        if (featureCacheKeys.length >= FEATURE_CACHE_MAX) {
+          var evicted = featureCacheKeys.shift();
+          delete featureCache[evicted];
+        }
+        featureCache[segName] = features;
+        featureCacheKeys.push(segName);
+
+        startFeatureRoll(features, duration);
+      })
+      .catch(function (err) {
+        console.error("Failed to query features for segment:", err);
+      });
+  }
+
+  // Fixed tick interval (ms) for rolling; batch size adjusts to fit the duration
+  var rollTickMs = 100;
+
+  function startFeatureRoll(features, duration) {
+    var durationSec = parseFloat(duration) || videoSegmentLength;
+    // Subtract the roll delay so rolling finishes in sync with the video
+    var availableMs = Math.max(rollTickMs, (durationSec - metadataRollDelay) * 1000);
+    var totalTicks = Math.floor(availableMs / rollTickMs);
+    var batchSize = Math.max(1, Math.ceil(features.length / totalTicks));
 
     rollState = {
-      start: start,
-      end: end,
-      currentIndex: start,
-      baseIntervalMs: baseIntervalMs
+      features: features,
+      currentIndex: 0,
+      end: features.length,
+      batchSize: batchSize
     };
 
     // Delay the start of rolling to give the video player time to load
     featureRollTimer = setTimeout(function () {
       if (!rollState) return;
-      window.appendFeature(rollState.currentIndex);
-      rollState.currentIndex++;
+      appendBatch();
       scheduleNextFeature();
     }, metadataRollDelay * 1000);
+  }
+
+  function appendBatch() {
+    if (!rollState) return;
+    var start = rollState.currentIndex;
+    var end = Math.min(start + rollState.batchSize, rollState.end);
+    var batch = rollState.features.slice(start, end);
+    rollState.currentIndex = end;
+    if (batch.length > 0) {
+      window.appendFeatureRow(batch);
+    }
   }
 
   function scheduleNextFeature() {
@@ -138,16 +227,14 @@
       featureRollTimer = null;
       return;
     }
-    // Adjust interval by the videoPlaySpeed multiplier
-    var adjustedMs = rollState.baseIntervalMs / videoPlaySpeed;
+    var adjustedMs = rollTickMs / videoPlaySpeed;
 
     featureRollTimer = setTimeout(function () {
       if (!rollState || rollState.currentIndex >= rollState.end) {
         featureRollTimer = null;
         return;
       }
-      window.appendFeature(rollState.currentIndex);
-      rollState.currentIndex++;
+      appendBatch();
       scheduleNextFeature();
     }, adjustedMs);
   }
@@ -159,10 +246,13 @@
     }
   }
 
-  // Pause rolling when video is paused; resume when played
+  // Pause rolling only when the user explicitly pauses (not when the video ends naturally).
+  // When the video ends, let the rolling continue so all features are displayed.
   if (video) {
     video.addEventListener('pause', function () {
-      stopFeatureRoll();
+      if (!video.ended) {
+        stopFeatureRoll();
+      }
     });
     video.addEventListener('play', function () {
       // Resume rolling if there are remaining features
@@ -210,13 +300,33 @@
       container.style.display = 'block';
 
       // When prefix matches media-store/video-hls/<camera-id>/<date>/<hour>/,
-      // query the feature layer for detections in that date/hour.
-      const hourLevelMatch = prefix.match(/^media-store\/video-hls\/[^/]+\/([^/]+\/[^/]+)\/$/);
-      const resolvedLayerUrl = getFeatureLayerUrl(prefix);
-      if (hourLevelMatch && resolvedLayerUrl && window.queryFeatures) {
-        const frameImageSubstring = hourLevelMatch[1] + "-";
-        console.log("Hour-level folder detected, querying features with:", frameImageSubstring);
-        window.queryFeatures(resolvedLayerUrl, frameImageSubstring);
+      // load video segment metadata from the media server and resolve the feature layer.
+      const hourLevelMatch = prefix.match(/^media-store\/video-hls\/([^/]+)\/([^/]+\/[^/]+)\/$/);
+      if (hourLevelMatch) {
+        const cameraId = hourLevelMatch[1];
+        const playlistKey = prefix + cameraId + ".m3u8";
+        const playlistUrl = `${HLS_VIEWER_BASE_URL}/api/playlist?key=${playlistKey}`;
+        console.log("Hour-level folder detected, loading playlist:", playlistUrl);
+        try {
+          const playlistRes = await fetch(playlistUrl);
+          const playlistText = await playlistRes.text();
+          const triplets = parsePlaylist(playlistText);
+          console.log("Parsed video segments:", triplets);
+
+          // Clear caches for the new hour-level folder
+          segmentTriplets = {};
+          featureCache = {};
+          featureCacheKeys = [];
+          triplets.forEach(function (t) {
+            segmentTriplets[t[1]] = t; // key = segment name, value = [timestamp, segment, duration]
+          });
+
+          // Resolve and store the feature layer URL for this camera/date
+          currentFeatureLayerUrl = getFeatureLayerUrl(prefix);
+          console.log("Feature layer URL:", currentFeatureLayerUrl);
+        } catch (err) {
+          console.error("Failed to load playlist:", err);
+        }
       }
 
     } catch (e) {
