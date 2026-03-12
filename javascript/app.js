@@ -2542,10 +2542,47 @@
             return s.type === "FeatureServer";
           });
           console.log("Fetched " + featureServices.length + " FeatureServer services");
+          populateFeatureLayerDropdown();
         }, function (error) {
           console.error("Failed to fetch feature services:", error);
         });
       }
+
+      // Populate the feature layer dropdown from fetched services
+      function populateFeatureLayerDropdown() {
+        var select = dojo.byId("featureLayerSelect");
+        if (!select) return;
+
+        // Preserve current selection if possible
+        var currentValue = select.value;
+
+        select.innerHTML = '<option value="">-- Select a Feature Layer --</option>';
+        featureServices.forEach(function (s) {
+          var opt = document.createElement("option");
+          opt.value = s.url + "/0";
+          opt.textContent = s.name;
+          select.appendChild(opt);
+        });
+
+        // Restore previous selection or match inputUrl
+        if (currentValue) {
+          select.value = currentValue;
+        } else {
+          var inputUrl = dojo.byId("inputUrl");
+          if (inputUrl) select.value = inputUrl.value;
+        }
+      }
+
+      // When user selects a layer from the dropdown, update inputUrl and refresh
+      on(dojo.byId("featureLayerSelect"), "change", function () {
+        var select = dojo.byId("featureLayerSelect");
+        if (!select || !select.value) return;
+        var inputUrl = dojo.byId("inputUrl");
+        if (inputUrl) {
+          inputUrl.value = select.value;
+        }
+        setFeatureLayers();
+      });
 
       // Resolve a FeatureServer URL for a given camera_id and date.
       // camera_id: e.g. "CalTrans-Camera-276"
@@ -2578,5 +2615,22 @@
       }
 
       window.resolveFeatureLayerUrl = resolveFeatureLayerUrl;
+
+      // Update the input URL, dropdown, and refresh aggregation layers
+      // to match a feature layer URL selected via video segment playback.
+      function setInputFeatureLayer(featureLayerUrl) {
+        var inputUrl = dojo.byId("inputUrl");
+        var select = dojo.byId("featureLayerSelect");
+
+        // Skip if already matching
+        if (inputUrl && inputUrl.value === featureLayerUrl) return;
+
+        if (inputUrl) inputUrl.value = featureLayerUrl;
+        if (select) select.value = featureLayerUrl;
+
+        setFeatureLayers();
+      }
+
+      window.setInputFeatureLayer = setInputFeatureLayer;
 
     });

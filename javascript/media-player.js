@@ -148,6 +148,11 @@
       return;
     }
 
+    // Sync the input URL and dropdown to match the metadata feature layer
+    if (window.setInputFeatureLayer) {
+      window.setInputFeatureLayer(currentFeatureLayerUrl);
+    }
+
     // Check cache first
     if (featureCache[segName]) {
       console.log("Cache hit for segment " + segName + ": " + featureCache[segName].length + " features");
