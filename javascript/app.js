@@ -60,6 +60,13 @@
 
       parser.parse();
 
+      // Fetch available FeatureServer services after user logs in
+      IdentityManager.on("credential-create", function () {
+        if (typeof fetchFeatureServices === "function") {
+          fetchFeatureServices();
+        }
+      });
+
       // ### global variables ###
       let _map;
       let _layerTimeExtent;
@@ -478,6 +485,9 @@
 
         // Fetch LOD info to populate dropdowns dynamically
         fetchLodInfo(dojo.byId("inputUrl").value);
+
+        // Fetch available FeatureServer services for dynamic layer lookup
+        fetchFeatureServices();
 
         const newAggregationLayer = addAggregationsLayer();
         newAggregationLayer.on("load", function () {
@@ -2499,5 +2509,74 @@
       window.appendFeature = appendFeature;
       window.appendFeatureRow = appendFeatureRow;
       window.renderAllFeatures = function () { renderFeatures(allFeatures); };
+
+      // ------------------------------------------------------------------
+      // Dynamic feature layer discovery from ArcGIS REST services endpoint
+      // ------------------------------------------------------------------
+      // Dynamic feature layer discovery from ArcGIS REST services endpoint
+      // ------------------------------------------------------------------
+      var SERVICES_URL = "https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services";
+
+      // All FeatureServer services fetched from the server
+      var featureServices = [];
+
+      // Fetch the services list with token from IdentityManager
+      function fetchFeatureServices() {
+        var tokenParam = "";
+        var credentials = IdentityManager.credentials;
+        for (var i = 0; i < credentials.length; i++) {
+          if (SERVICES_URL.indexOf(credentials[i].server) !== -1 && credentials[i].token) {
+            tokenParam = "&token=" + credentials[i].token;
+            break;
+          }
+        }
+
+        var url = SERVICES_URL + "?f=json" + tokenParam;
+        var request = esriRequest({
+          url: url,
+          handleAs: "json",
+          callbackParamName: "callback"
+        });
+        request.then(function (response) {
+          featureServices = (response.services || []).filter(function (s) {
+            return s.type === "FeatureServer";
+          });
+          console.log("Fetched " + featureServices.length + " FeatureServer services");
+        }, function (error) {
+          console.error("Failed to fetch feature services:", error);
+        });
+      }
+
+      // Resolve a FeatureServer URL for a given camera_id and date.
+      // camera_id: e.g. "CalTrans-Camera-276"
+      // date: e.g. "2026-03-11"
+      // Prefers services with "_PolyAgg" suffix; appends "/0" for the layer index.
+      function resolveFeatureLayerUrl(cameraId, date) {
+        // Convert camera_id: "CalTrans-Camera-276" → "CalTrans_Camera_276"
+        var cameraPrefix = cameraId.replace(/-/g, '_');
+
+        // Convert date: "2026-03-11" → "03112026" (MMDDYYYY)
+        var parts = date.split('-');
+        var dateStr = parts[1] + parts[2] + parts[0]; // MM + DD + YYYY
+
+        // Find services whose name starts with "{camera}_{date}"
+        var prefix = cameraPrefix + '_' + dateStr;
+        var matches = featureServices.filter(function (s) {
+          return s.name.indexOf(prefix) === 0;
+        });
+
+        if (matches.length === 0) return null;
+
+        // Prefer the one with _PolyAgg suffix
+        var polyAgg = matches.filter(function (s) {
+          return /_PolyAgg\d*$/.test(s.name);
+        });
+
+        // Pick the last (latest) PolyAgg match, or fall back to last overall match
+        var chosen = polyAgg.length > 0 ? polyAgg[polyAgg.length - 1] : matches[matches.length - 1];
+        return chosen.url + "/0";
+      }
+
+      window.resolveFeatureLayerUrl = resolveFeatureLayerUrl;
 
     });

@@ -28,20 +28,13 @@
   let featureCacheKeys = [];   // ordered from oldest to newest
   let featureCache = {};       // segment name → features array
 
-  // TODO: we need to read the feature layer lookup table from a datastore!
-  // Lookup table: feature layer URL by camera_id and date
-  // Key format: "<camera_id>/<date>"
-  const featureLayerLookup = {
-    "CalTrans-Camera-276/2026-03-11":
-        "https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services/CalTrans_Camera_276_03112026_20237_PolyAgg/FeatureServer/0"
-  };
-
   // Resolve feature layer URL from a prefix like media-store/video-hls/<camera-id>/<date>/<hour>/
+  // Uses the dynamic lookup provided by app.js (window.resolveFeatureLayerUrl)
   function getFeatureLayerUrl(prefix) {
     var match = prefix.match(/^media-store\/video-hls\/([^/]+)\/([^/]+)\//);
     if (!match) return null;
-    var key = match[1] + "/" + match[2];
-    return featureLayerLookup[key] || null;
+    if (!window.resolveFeatureLayerUrl) return null;
+    return window.resolveFeatureLayerUrl(match[1], match[2]);
   }
 
   // Parse an HLS playlist response into a list of [timestamp, segment, duration] triplets.
@@ -311,7 +304,7 @@
           const playlistRes = await fetch(playlistUrl);
           const playlistText = await playlistRes.text();
           const triplets = parsePlaylist(playlistText);
-          console.log("Parsed video segments:", triplets);
+          //console.log("Parsed video segments:", triplets);
 
           // Clear caches for the new hour-level folder
           segmentTriplets = {};
