@@ -83,7 +83,9 @@
       let _cachedLinkedLayerUri = null;
       let _cachedLinkedFeatures = null;
       let _polyAggAutoRefresh = false;
-      let _polyAggRefreshInterval = null;
+      let _polyAggPolygonRefreshInterval = null;
+      let _polyAggLabelRefreshInterval = null;
+      let _polyAggContext = null;
       let _lodAutoRefresh = false;
       let _lodRefreshInterval = null;
       
@@ -205,6 +207,7 @@
       // ### Section visibility state objects ###
       const layersVisibility = { value: true };
       const polyAggSettingsVisibility = { value: true };
+      const polyAggLabelVisibility = { value: true };
       const aggSettingsVisibility = { value: true };
       const aggStyleVisibility = { value: false };
       const aggBinsVisibility = { value: true };
@@ -222,11 +225,24 @@
       on(dojo.byId("aggBinsToggle"), "click", createSectionToggle("aggBinsSection", "aggBinsToggle", aggBinsVisibility));
       on(dojo.byId("streamingModeToggle"), "click", createSectionToggle("streamingModeSection", "streamingModeToggle", streamingModeVisibility));
       on(dojo.byId("polyAggSettingsToggle"), "click", createSectionToggle("polyAggSettingsSection", "polyAggSettingsToggle", polyAggSettingsVisibility));
-      on(dojo.byId("fetchPolyAggMetadata"), "click", fetchPolygonalAggMetadata);
+      on(dojo.byId("polyAggLabelToggle"), "click", createSectionToggle("polyAggLabelSection", "polyAggLabelToggle", polyAggLabelVisibility));
+
+      // Video Layer panel toggle (floating panel behind #controls)
+      on(dojo.byId("videoLayerToggle"), "click", function (e) {
+        e.preventDefault();
+        var panel = dojo.byId("video-layer-panel");
+        if (!panel) return;
+        var isHidden = domClass.toggle(panel, "section-hidden");
+        var icon = domQuery("#videoLayerToggle i")[0];
+        if (icon) {
+          domClass.replace(icon, isHidden ? "fa-chevron-down" : "fa-chevron-up", isHidden ? "fa-chevron-up" : "fa-chevron-down");
+        }
+      });
       on(dojo.byId("applyPolyAggButton"), "click", applyPolygonalAggregation);
       on(dojo.byId("polyAggAutoRefresh"), "change", function () {
         if (!this.checked) {
-          clearTimeout(_polyAggRefreshInterval);
+          clearTimeout(_polyAggPolygonRefreshInterval);
+          clearTimeout(_polyAggLabelRefreshInterval);
           _polyAggAutoRefresh = false;
         }
       });
@@ -488,6 +504,9 @@
 
         // Fetch available FeatureServer services for dynamic layer lookup
         fetchFeatureServices();
+
+        // Auto-fetch polygonal aggregation metadata for the new layer
+        fetchPolygonalAggMetadata();
 
         const newAggregationLayer = addAggregationsLayer();
         newAggregationLayer.on("load", function () {
@@ -783,6 +802,12 @@
           typeSelect.appendChild(option);
         });
 
+        // Hide the type dropdown row when there is only one aggregation type
+        var typeRow = dojo.byId("polyAggTypeRow");
+        if (typeRow) {
+          typeRow.style.display = polygonalAggInfos.length <= 1 ? "none" : "";
+        }
+
         // Populate Aggregation Field based on the first aggType
         updatePolyAggFieldDropdown();
 
@@ -828,6 +853,10 @@
        *  6. Apply a ClassBreaksRenderer to visualise the result
        */
       function applyPolygonalAggregation() {
+        // Clear both timers to prevent stacking
+        clearTimeout(_polyAggPolygonRefreshInterval);
+        clearTimeout(_polyAggLabelRefreshInterval);
+
         const typeSelect = dojo.byId("polyAggType");
         const fieldSelect = dojo.byId("polyAggField");
         if (!typeSelect || !fieldSelect) return;
@@ -903,6 +932,16 @@
           polygonalAggField: fieldName,
           returnGeometry: false,
           f: "json"
+        };
+
+        // Save context for label-only refresh
+        _polyAggContext = {
+          inputUrl: inputUrl,
+          polygonalAggType: polygonalAggType,
+          fieldName: fieldName,
+          commonFields: commonFields,
+          joinFields: joinFields,
+          aggTypePrefix: polygonalAggType + "."
         };
 
         console.log("Polygonal aggregation POST to: " + inputUrl + "/query");
@@ -1068,6 +1107,20 @@
                 // Use GeometryService.labelPoints to compute interior label points for all polygons
                 var geometries = array.map(graphics, function (g) { return g.geometry; });
                 if (geometries.length > 0 && geometries[0].rings.length > 0) {
+                  // Read label settings from Polygon Aggregation Label panel
+                  var palFont = (dojo.byId("polyAggLabelFont") || {}).value || "arial";
+                  var palStyle = (dojo.byId("polyAggLabelStyle") || {}).value || "normal";
+                  var palWeight = (dojo.byId("polyAggLabelWeight") || {}).value || "bold";
+                  var palSize = parseInt((dojo.byId("polyAggLabelSize") || {}).value) || 10;
+                  var palColorHex = (dojo.byId("polyAggLabelColor") || {}).value || "#000000";
+                  var palOpacity = parseFloat((dojo.byId("polyAggLabelOpacity") || {}).value);
+                  if (isNaN(palOpacity)) palOpacity = 1;
+
+                  // Parse hex color to RGB
+                  var palR = parseInt(palColorHex.slice(1, 3), 16);
+                  var palG = parseInt(palColorHex.slice(3, 5), 16);
+                  var palB = parseInt(palColorHex.slice(5, 7), 16);
+
                   _gs.labelPoints(geometries).then(function (labelPts) {
                     var polyAggLabelsLayer = new GraphicsLayer({ id: "polyAggLabels" });
                     array.forEach(labelPts, function (labelPoint, i) {
@@ -1075,9 +1128,11 @@
                       var count = graphics[i].attributes ? graphics[i].attributes[cleanCountFieldName] : "";
                       if (count === null || count === undefined) return;
                       var textSymbol = new TextSymbol(number.format(count, { places: 0 }));
-                      textSymbol.setColor(new Color([0, 0, 0, 1]));
-                      textSymbol.font.setSize("10pt");
-                      textSymbol.font.setWeight("bold");
+                      textSymbol.setColor(new Color([palR, palG, palB, palOpacity]));
+                      textSymbol.font.setFamily(palFont);
+                      textSymbol.font.setSize(palSize + "pt");
+                      textSymbol.font.setStyle(palStyle);
+                      textSymbol.font.setWeight(palWeight);
                       textSymbol.setHaloColor(new Color([255, 255, 255, 0.7]));
                       textSymbol.setHaloSize(1);
                       polyAggLabelsLayer.add(new Graphic(labelPoint, textSymbol));
@@ -1086,11 +1141,16 @@
                   });
                 }
 
-                // Schedule auto-refresh if enabled
+                // Schedule auto-refresh if enabled (separate rates for polygons and labels)
                 if (dojo.byId("polyAggAutoRefresh").checked) {
                   _polyAggAutoRefresh = true;
                   var intervalSec = parseFloat(dojo.byId("polyAggRefreshInterval").value) || 5;
-                  _polyAggRefreshInterval = setTimeout(applyPolygonalAggregation, intervalSec * 1000);
+                  // Polygon rendering refreshes at 10x the user-set interval
+                  clearTimeout(_polyAggPolygonRefreshInterval);
+                  _polyAggPolygonRefreshInterval = setTimeout(applyPolygonalAggregation, intervalSec * 10 * 1000);
+                  // Label rendering refreshes at the user-set interval
+                  clearTimeout(_polyAggLabelRefreshInterval);
+                  _polyAggLabelRefreshInterval = setTimeout(refreshPolyAggLabelsOnly, intervalSec * 1000);
                 }
               });
             });
@@ -1129,14 +1189,170 @@
       }
 
       /**
+       * Refreshes only the polygonal aggregation labels by re-querying
+       * aggregation data and updating label text, without re-rendering polygons.
+       */
+      function refreshPolyAggLabelsOnly() {
+        if (!_polyAggContext) return;
+        var ctx = _polyAggContext;
+
+        var postContent = {
+          polygonalAggType: ctx.polygonalAggType,
+          polygonalAggField: ctx.fieldName,
+          returnGeometry: false,
+          f: "json"
+        };
+
+        console.log("Label-only refresh: POST to " + ctx.inputUrl + "/query");
+
+        var aggRequest = esriRequest({
+          url: ctx.inputUrl + "/query",
+          content: postContent,
+          handleAs: "json",
+          callbackParamName: "callback"
+        }, { usePost: true });
+
+        aggRequest.then(function (aggResponse) {
+          var aggFeatures = Array.isArray(aggResponse.features) ? aggResponse.features : [];
+          if (aggFeatures.length === 0) return;
+
+          var aggTypePrefix = ctx.aggTypePrefix;
+          function stripPrefix(name) {
+            return name.startsWith(aggTypePrefix) ? name.substring(aggTypePrefix.length) : name;
+          }
+
+          var cleanCountFieldName = stripPrefix("Count");
+
+          array.forEach(aggFeatures, function (f) {
+            var cleaned = {};
+            for (var attrName in f.attributes) {
+              cleaned[stripPrefix(attrName)] = f.attributes[attrName];
+            }
+            f.attributes = cleaned;
+          });
+
+          var aggLookup = {};
+          array.forEach(aggFeatures, function (f) {
+            var keyParts = [];
+            array.forEach(ctx.commonFields, function (cf) {
+              keyParts.push(f.attributes[cf] !== undefined && f.attributes[cf] !== null ? f.attributes[cf] : "");
+            });
+            var key = keyParts.join("|");
+            var count = f.attributes[cleanCountFieldName] || 0;
+            aggLookup[key] = (aggLookup[key] || 0) + count;
+          });
+
+          // Get existing polygon layer graphics for geometries and keys
+          var resultLayer = _map.getLayer("polyAggResult");
+          if (!resultLayer || !resultLayer.graphics || resultLayer.graphics.length === 0) return;
+
+          var existingGraphics = resultLayer.graphics;
+          var geometries = array.map(existingGraphics, function (g) { return g.geometry; });
+
+          // Remove old labels
+          var prevLabels = _map.getLayer("polyAggLabels");
+          if (prevLabels) {
+            _map.removeLayer(prevLabels);
+          }
+
+          // Read label settings from Polygon Aggregation Label panel
+          var palFont = (dojo.byId("polyAggLabelFont") || {}).value || "arial";
+          var palStyle = (dojo.byId("polyAggLabelStyle") || {}).value || "normal";
+          var palWeight = (dojo.byId("polyAggLabelWeight") || {}).value || "bold";
+          var palSize = parseInt((dojo.byId("polyAggLabelSize") || {}).value) || 10;
+          var palColorHex = (dojo.byId("polyAggLabelColor") || {}).value || "#000000";
+          var palOpacity = parseFloat((dojo.byId("polyAggLabelOpacity") || {}).value);
+          if (isNaN(palOpacity)) palOpacity = 1;
+
+          var palR = parseInt(palColorHex.slice(1, 3), 16);
+          var palG = parseInt(palColorHex.slice(3, 5), 16);
+          var palB = parseInt(palColorHex.slice(5, 7), 16);
+
+          if (geometries.length > 0 && geometries[0].rings && geometries[0].rings.length > 0) {
+            _gs.labelPoints(geometries).then(function (labelPts) {
+              var polyAggLabelsLayer = new GraphicsLayer({ id: "polyAggLabels" });
+              array.forEach(labelPts, function (labelPoint, i) {
+                if (!labelPoint) return;
+                var keyParts = [];
+                array.forEach(ctx.commonFields, function (cf) {
+                  keyParts.push(existingGraphics[i].attributes[cf] || "");
+                });
+                var key = keyParts.join("|");
+                var count = aggLookup[key] || 0;
+                if (count === null || count === undefined) return;
+                var textSymbol = new TextSymbol(number.format(count, { places: 0 }));
+                textSymbol.setColor(new Color([palR, palG, palB, palOpacity]));
+                textSymbol.font.setFamily(palFont);
+                textSymbol.font.setSize(palSize + "pt");
+                textSymbol.font.setStyle(palStyle);
+                textSymbol.font.setWeight(palWeight);
+                textSymbol.setHaloColor(new Color([255, 255, 255, 0.7]));
+                textSymbol.setHaloSize(1);
+                polyAggLabelsLayer.add(new Graphic(labelPoint, textSymbol));
+              });
+              _map.addLayer(polyAggLabelsLayer);
+              console.log("Label-only refresh complete: " + labelPts.length + " labels updated.");
+
+              // Schedule next label-only refresh
+              if (dojo.byId("polyAggAutoRefresh").checked) {
+                var intervalSec = parseFloat(dojo.byId("polyAggRefreshInterval").value) || 5;
+                clearTimeout(_polyAggLabelRefreshInterval);
+                _polyAggLabelRefreshInterval = setTimeout(refreshPolyAggLabelsOnly, intervalSec * 1000);
+              }
+            });
+          }
+        }, function (error) {
+          console.log("Error in label-only refresh: " + error.message);
+        });
+      }
+
+      /**
        * Creates a ClassBreaksRenderer for polygonal aggregation results
        * Uses the "agg_count" field with color ramp from light to dark
        * @param {number} maxCount - The maximum aggregation count for scaling breaks
        * @returns {ClassBreaksRenderer} The renderer instance
        */
+      // Color ramp definitions for polygonal aggregation renderer
+      var _polyAggColorRamps = {
+        blue:     [[222,235,247],[198,219,239],[158,202,225],[107,174,214],[66,146,198],[33,113,181],[8,81,156]],
+        red:      [[254,229,217],[252,187,161],[252,146,114],[251,106,74],[239,59,44],[203,24,29],[153,0,13]],
+        green:    [[229,245,224],[199,233,192],[161,217,155],[116,196,118],[65,171,93],[35,139,69],[0,104,55]],
+        orange:   [[254,237,222],[253,208,162],[253,174,107],[253,141,60],[241,105,19],[217,72,1],[166,54,3]],
+        purple:   [[239,237,245],[218,218,235],[188,189,220],[158,154,200],[128,125,186],[106,81,163],[74,20,134]],
+        heat:     [[255,255,178],[254,217,118],[254,178,76],[253,141,60],[252,78,42],[227,26,28],[177,0,38]],
+        spectral: [[215,25,28],[253,174,97],[254,204,92],[255,255,191],[171,221,164],[43,131,186],[36,104,180]]
+      };
+
       function createPolyAggClassBreaksRenderer(maxCount, fieldName) {
         if (maxCount <= 0) maxCount = 1;
         if (!fieldName) fieldName = "agg_count";
+
+        var numBreaks = parseInt((dojo.byId("polyAggClassBreaks") || {}).value) || 7;
+        var rampName = (dojo.byId("polyAggColorRamp") || {}).value || "blue";
+        var fillOpacity = parseFloat((dojo.byId("polyAggFillOpacity") || {}).value);
+        if (isNaN(fillOpacity)) fillOpacity = 0.6;
+
+        var rampColors = _polyAggColorRamps[rampName] || _polyAggColorRamps.blue;
+
+        // Interpolate ramp to the requested number of breaks
+        function interpolateRamp(colors, n) {
+          if (n <= 1) return [colors[0]];
+          var result = [];
+          for (var i = 0; i < n; i++) {
+            var t = i / (n - 1) * (colors.length - 1);
+            var lo = Math.floor(t);
+            var hi = Math.min(lo + 1, colors.length - 1);
+            var frac = t - lo;
+            result.push([
+              Math.round(colors[lo][0] + (colors[hi][0] - colors[lo][0]) * frac),
+              Math.round(colors[lo][1] + (colors[hi][1] - colors[lo][1]) * frac),
+              Math.round(colors[lo][2] + (colors[hi][2] - colors[lo][2]) * frac)
+            ]);
+          }
+          return result;
+        }
+
+        var ramp = interpolateRamp(rampColors, numBreaks);
 
         function createSymbol(color) {
           return new SimpleFillSymbol()
@@ -1146,19 +1362,20 @@
             );
         }
 
-        const breakSize = maxCount / 7;
-        const renderer = new ClassBreaksRenderer({
+        var breakSize = maxCount / numBreaks;
+        var classBreakInfos = [];
+        for (var i = 0; i < numBreaks; i++) {
+          classBreakInfos.push({
+            minValue: i === 0 ? 0 : breakSize * i,
+            maxValue: i === numBreaks - 1 ? maxCount + 1 : breakSize * (i + 1),
+            symbol: createSymbol(new Color([ramp[i][0], ramp[i][1], ramp[i][2], fillOpacity]))
+          });
+        }
+
+        var renderer = new ClassBreaksRenderer({
           field: fieldName,
           defaultSymbol: createSymbol(new Color([150, 150, 150, 0.3])),
-          classBreakInfos: [
-            { minValue: 0, maxValue: breakSize, symbol: createSymbol(new Color([222, 235, 247, 0.6])) },
-            { minValue: breakSize, maxValue: breakSize * 2, symbol: createSymbol(new Color([198, 219, 239, 0.6])) },
-            { minValue: breakSize * 2, maxValue: breakSize * 3, symbol: createSymbol(new Color([158, 202, 225, 0.6])) },
-            { minValue: breakSize * 3, maxValue: breakSize * 4, symbol: createSymbol(new Color([107, 174, 214, 0.6])) },
-            { minValue: breakSize * 4, maxValue: breakSize * 5, symbol: createSymbol(new Color([66, 146, 198, 0.6])) },
-            { minValue: breakSize * 5, maxValue: breakSize * 6, symbol: createSymbol(new Color([33, 113, 181, 0.6])) },
-            { minValue: breakSize * 6, maxValue: maxCount + 1, symbol: createSymbol(new Color([8, 81, 156, 0.6])) }
-          ]
+          classBreakInfos: classBreakInfos
         });
 
         return renderer;
@@ -2398,11 +2615,19 @@
       // Query features for a specific time range (timestamp + duration).
       // Uses ISO timestamp strings to query the "timestamp" field on the feature layer.
       // Returns a Promise that resolves with an array of features.
+      // Delay (in seconds) added to the segment timestamp to account for
+      // the processing pipeline lag between video capture and feature availability.
+      var FEATURE_TIMESTAMP_DELAY_SEC = 2 * 60 + 2; // 2 min 2 sec
+      var DURATION_EXTENSION_SEC = 7; // Extend the query window beyond the segment duration to ensure we capture all features
+
       function queryFeaturesForTimeRange(featureServiceUrl, timestamp, durationSec) {
-        var endDate = new Date(new Date(timestamp).getTime() + parseFloat(durationSec) * 1000);
+        var delayMs = FEATURE_TIMESTAMP_DELAY_SEC * 1000;
+        var startDate = new Date(new Date(timestamp).getTime() + delayMs);
+        var endDate = new Date(startDate.getTime() + parseFloat(durationSec) * 1000 + DURATION_EXTENSION_SEC * 1000);
+        var startTimestamp = startDate.toISOString();
         var endTimestamp = endDate.toISOString();
 
-        var where = "timestamp >= '" + timestamp + "' AND timestamp < '" + endTimestamp + "'";
+        var where = "timestamp >= '" + startTimestamp + "' AND timestamp < '" + endTimestamp + "'";
 
         var outFields = [
           'camera_id', 'frame_id', 'frame_image', 'track_id',
@@ -2582,6 +2807,7 @@
           inputUrl.value = select.value;
         }
         setFeatureLayers();
+        fetchObjectTypes(select.value);
       });
 
       // Resolve a FeatureServer URL for a given camera_id and date.
@@ -2629,8 +2855,62 @@
         if (select) select.value = featureLayerUrl;
 
         setFeatureLayers();
+
+        // Populate video layer object types from the new feature layer
+        fetchObjectTypes(featureLayerUrl);
       }
 
       window.setInputFeatureLayer = setInputFeatureLayer;
+
+      // ------------------------------------------------------------------
+      // Video Layer: populate Detected Object Types from feature layer
+      // ------------------------------------------------------------------
+      function fetchObjectTypes(featureServiceUrl) {
+        var tokenParam = "";
+        var credentials = IdentityManager.credentials;
+        for (var i = 0; i < credentials.length; i++) {
+          if (featureServiceUrl.indexOf(credentials[i].server) !== -1 && credentials[i].token) {
+            tokenParam = "&token=" + credentials[i].token;
+            break;
+          }
+        }
+
+        // Use returnDistinctValues to get unique object_class values
+        var url = featureServiceUrl + "/query"
+          + "?where=1%3D1"
+          + "&outFields=object_class"
+          + "&returnDistinctValues=true"
+          + "&returnGeometry=false"
+          + "&orderByFields=" + encodeURIComponent("object_class ASC")
+          + "&f=json"
+          + tokenParam;
+
+        var request = esriRequest({
+          url: url,
+          handleAs: "json",
+          callbackParamName: "callback"
+        });
+        request.then(function (response) {
+          var features = response.features || [];
+          var select = dojo.byId("videoObjectType");
+          if (!select) return;
+
+          select.innerHTML = '<option value="">All Types</option>';
+          features.forEach(function (f) {
+            var objClass = (f.attributes && f.attributes.object_class) || "";
+            if (objClass) {
+              var opt = document.createElement("option");
+              opt.value = objClass;
+              opt.textContent = objClass;
+              select.appendChild(opt);
+            }
+          });
+          console.log("Populated " + features.length + " object types");
+        }, function (error) {
+          console.error("Failed to fetch object types:", error);
+        });
+      }
+
+      window.fetchObjectTypes = fetchObjectTypes;
 
     });

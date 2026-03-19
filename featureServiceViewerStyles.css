@@ -130,11 +130,19 @@ body {
 .video-wrapper {
     width: 100%;
     background: black;
+    position: relative;
 }
 
 .video-wrapper video {
     width: 100%;
     display: block;
+}
+
+#videoOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
 }
 
 .video-info {
@@ -168,6 +176,34 @@ body {
 .video-badge-direct { background: #6c757d; }
 .video-badge-error { background: #dc3545; }
 .video-badge-live { background: #dc3545; }
+
+
+/* Video Layer panel — anchored to the right, next to the controls sidebar */
+#video-layer-panel {
+    bottom: 10px;
+    right: 310px;
+    width: 260px;
+    transition: right 300ms ease;
+}
+
+.panel-collapsed #video-layer-panel {
+    right: 10px;
+}
+
+#video-layer-panel .config-header {
+    cursor: pointer;
+}
+
+#video-layer-panel .floating-panel-content {
+    padding: 0;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+#video-layer-panel.section-hidden .floating-panel-content {
+    max-height: 0;
+    padding: 0;
+}
 
 /* Features panel — sits to the right of Video Player */
 #features-panel {

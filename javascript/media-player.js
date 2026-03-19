@@ -114,6 +114,9 @@
   // Timer ID for the rolling feature display so we can cancel on new segment
   var featureRollTimer = null;
 
+  // Timer ID for the shape drawing loop (separate from metadata rolling)
+  var shapeDrawTimer = null;
+
   // ------------------------------------------------------------------
   // selectFeaturesForSegment — sync video segment to feature display
   // Extracts segment number from key (e.g. "segment00011.ts" → 11),
@@ -140,8 +143,9 @@
     var duration = triplet[2];
     console.log("Segment " + segName + ": querying features for timestamp=" + timestamp + ", duration=" + duration);
 
-    // Clear table and start fresh for this segment
+    // Clear table and video overlay for this segment
     if (window.clearFeaturesTable) window.clearFeaturesTable();
+    if (window.videoOverlay) window.videoOverlay.clearOverlay();
 
     if (!currentFeatureLayerUrl || !window.queryFeaturesForTimeRange) {
       console.warn("No feature layer URL or queryFeaturesForTimeRange not available");
@@ -201,14 +205,106 @@
       batchSize: batchSize
     };
 
-    // Delay the start of rolling to give the video player time to load
+    // Group features by timestamp for shape drawing
+    var frameGroups = groupFeaturesByTimestamp(features);
+
+    // Delay the start of both rolling and shape drawing
     featureRollTimer = setTimeout(function () {
       if (!rollState) return;
       appendBatch();
       scheduleNextFeature();
     }, metadataRollDelay * 1000);
+
+    // Start shape drawing loop in parallel
+    startShapeDrawLoop(frameGroups, durationSec);
   }
 
+  // ------------------------------------------------------------------
+  // Group features by their timestamp attribute into ordered frames
+  // Returns an array of { timestamp, features } objects
+  // ------------------------------------------------------------------
+  function groupFeaturesByTimestamp(features) {
+    var map = {};
+    var order = [];
+    features.forEach(function (f) {
+      var ts = (f.attributes && f.attributes.timestamp) || "";
+      if (!map[ts]) {
+        map[ts] = [];
+        order.push(ts);
+      }
+      map[ts].push(f);
+    });
+    return order.map(function (ts) {
+      return { timestamp: ts, features: map[ts] };
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Shape drawing loop — draws all shapes for one frame (same timestamp)
+  // at a time, paced to finish within the segment duration.
+  // ------------------------------------------------------------------
+  var shapeDrawState = null; // { frameGroups, currentFrame, end, intervalMs }
+
+  function startShapeDrawLoop(frameGroups, durationSec) {
+    stopShapeDraw();
+    if (!frameGroups || frameGroups.length === 0) return;
+
+    var availableMs = Math.max(100, (durationSec - metadataRollDelay) * 1000);
+    var intervalMs = availableMs / frameGroups.length;
+
+    shapeDrawState = {
+      frameGroups: frameGroups,
+      currentFrame: 0,
+      end: frameGroups.length,
+      intervalMs: intervalMs
+    };
+
+    shapeDrawTimer = setTimeout(function () {
+      if (!shapeDrawState) return;
+      drawCurrentFrame();
+      scheduleNextFrame();
+    }, metadataRollDelay * 1000);
+  }
+
+  function drawCurrentFrame() {
+    if (!shapeDrawState || shapeDrawState.currentFrame >= shapeDrawState.end) return;
+    var group = shapeDrawState.frameGroups[shapeDrawState.currentFrame];
+    shapeDrawState.currentFrame++;
+
+    if (window.videoOverlay) {
+      window.videoOverlay.clearOverlay();
+      window.videoOverlay.drawFeatures(group.features);
+    }
+  }
+
+  function scheduleNextFrame() {
+    if (!shapeDrawState || shapeDrawState.currentFrame >= shapeDrawState.end) {
+      shapeDrawTimer = null;
+      return;
+    }
+    var adjustedMs = shapeDrawState.intervalMs / videoPlaySpeed;
+
+    shapeDrawTimer = setTimeout(function () {
+      if (!shapeDrawState || shapeDrawState.currentFrame >= shapeDrawState.end) {
+        shapeDrawTimer = null;
+        return;
+      }
+      drawCurrentFrame();
+      scheduleNextFrame();
+    }, adjustedMs);
+  }
+
+  function stopShapeDraw() {
+    if (shapeDrawTimer) {
+      clearTimeout(shapeDrawTimer);
+      shapeDrawTimer = null;
+    }
+    shapeDrawState = null;
+  }
+
+  // ------------------------------------------------------------------
+  // Metadata rolling (table rows only, no shape drawing)
+  // ------------------------------------------------------------------
   function appendBatch() {
     if (!rollState) return;
     var start = rollState.currentIndex;
@@ -242,6 +338,7 @@
       clearTimeout(featureRollTimer);
       featureRollTimer = null;
     }
+    stopShapeDraw();
   }
 
   // Pause rolling only when the user explicitly pauses (not when the video ends naturally).
@@ -253,9 +350,13 @@
       }
     });
     video.addEventListener('play', function () {
-      // Resume rolling if there are remaining features
+      // Resume metadata rolling if there are remaining features
       if (rollState && rollState.currentIndex < rollState.end && !featureRollTimer) {
         scheduleNextFeature();
+      }
+      // Resume shape drawing if there are remaining frames
+      if (shapeDrawState && shapeDrawState.currentFrame < shapeDrawState.end && !shapeDrawTimer) {
+        scheduleNextFrame();
       }
     });
   }

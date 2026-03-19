@@ -67,6 +67,7 @@
     <div class="floating-panel-content" id="videoPlayerContent">
       <div class="video-wrapper">
         <video id="hlsVideo" controls></video>
+        <svg id="videoOverlay" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
       <div class="video-info">
         <div id="video-file-name">Select a file</div>
@@ -107,11 +108,79 @@
     <i id="collapserIcon" class="flat-chevron-right"></i>
     <i id="expanderIcon" class="flat-chevron-left"></i>
   </div>
+
+  <!-- Video Layer panel — hidden behind #controls, revealed when sidebar collapses -->
+  <div id="video-layer-panel" class="floating-panel section-hidden">
+    <div class="config-header">
+      <h2><i class="fa fa-video-camera"></i> Video Layer</h2>
+      <div class="header-actions-group">
+        <a href="#" id="videoLayerToggle"><i class="fa fa-chevron-down"></i></a>
+      </div>
+    </div>
+    <div class="floating-panel-content" id="videoLayerContent">
+      <div style="padding: 8px 10px;">
+        <!-- Detected Object Types -->
+        <div style="margin-bottom: 6px;">
+          <label for="videoObjectType" style="font-size:11px; font-weight:bold; display:block; margin-bottom:2px;">Detected Object Types</label>
+          <select id="videoObjectType" style="width: 100%;">
+            <option value="all">All Types</option>
+            <option value="car">Car</option>
+            <option value="truck">Truck</option>
+            <option value="semi-truck">Semi-Truck</option>
+          </select>
+        </div>
+
+        <!-- Object Shapes -->
+        <div style="margin-bottom: 6px;">
+          <label for="videoObjectShape" style="font-size:11px; font-weight:bold; display:block; margin-bottom:2px;">Object Shapes</label>
+          <select id="videoObjectShape" style="width: 100%;">
+            <option value="bbox" selected>Bounding Box</option>
+            <option value="segmentation">Segmentation</option>
+          </select>
+        </div>
+
+        <!-- Geo Confidence -->
+        <div style="margin-bottom: 6px;">
+          <label for="videoGeoConfidence" style="font-size:11px; font-weight:bold; display:block; margin-bottom:2px;">Geo Confidence</label>
+          <select id="videoGeoConfidence" style="width: 100%;">
+            <option value="all" selected>All Levels</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+
+        <!-- Confidence Score -->
+        <div style="margin-bottom: 6px;">
+          <label for="videoConfidenceScore" style="font-size:11px; font-weight:bold; display:block; margin-bottom:2px;">Confidence Score &ge;</label>
+          <input type="number" id="videoConfidenceScore" value="0.0" min="0.0" max="1.0" step="0.05" style="width: 80px;" />
+        </div>
+
+        <!-- Shape Styling -->
+        <div style="margin-bottom: 4px;">
+          <label style="font-size:11px; font-weight:bold; display:block; margin-bottom:4px;">Shape Style</label>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+            <label for="videoStrokeColor" style="font-size:11px; min-width:40px;">Stroke</label>
+            <input type="color" id="videoStrokeColor" value="#FF0000" style="width:36px; height:24px; padding:0; border:1px solid #ccc;" />
+            <label for="videoStrokeWidth" style="font-size:11px; min-width:35px;">Width</label>
+            <input type="number" id="videoStrokeWidth" value="2" min="1" max="10" step="1" style="width:50px;" />
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label for="videoFillColor" style="font-size:11px; min-width:40px;">Fill</label>
+            <input type="color" id="videoFillColor" value="#FF0000" style="width:36px; height:24px; padding:0; border:1px solid #ccc;" />
+            <label for="videoFillOpacity" style="font-size:11px; min-width:35px;">Alpha</label>
+            <input type="number" id="videoFillOpacity" value="0.2" min="0.0" max="1.0" step="0.1" style="width:50px;" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="controls">
     <!-- [Section 1] Layers -->
     <section id="layersSection">
       <div class="config-header">
-        <h2>Layers</h2>
+        <h2>Feature Layers</h2>
         <div class="header-actions-group">
           <a href="#" id="layersToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
@@ -181,25 +250,24 @@
       </div>
     </section>
 
-    <!-- [Section 1.6] Polygonal Aggregations -->
+    <!-- [Section 1.6] Polygon Aggregation Settings -->
     <section id="polyAggSettingsSection">
       <div class="config-header">
-        <h2>Polygonal Aggregations</h2>
+        <h2>Polygon Aggregation Settings</h2>
         <div class="header-actions-group">
           <a href="#" id="polyAggSettingsToggle"><i class="fa fa-chevron-up"></i></a>
         </div>
       </div>
       <div class="config-content" style="padding-bottom: 5px;">
-        <div class="input-group input-group-full">
+        <div id="polyAggTypeRow" class="input-group input-group-full">
           <select id="polyAggType" style="width: 100px;"></select>
-          <label for="polyAggType">Polygonal Agg Type</label>
+          <label for="polyAggType">Aggregation Type</label>
         </div>
         <div class="input-group input-group-full">
           <select id="polyAggField" style="width: 100px;"></select>
-          <label for="polyAggField">Polygonal Agg Field</label>
+          <label for="polyAggField">Aggregation Level</label>
         </div>
         <div class="input-row">
-          <input type="button" class="button" id="fetchPolyAggMetadata" value="Fetch Metadata" />
           <input type="button" class="button" id="applyPolyAggButton" value="Apply" />
         </div>
         <div class="input-row" style="display:flex; align-items:center;">
@@ -207,6 +275,89 @@
           <label for="polyAggAutoRefresh" style="margin-right:10px;">Auto refresh</label>
           <input type="number" id="polyAggRefreshInterval" value="5" style="width:50px;" />
           <label for="polyAggRefreshInterval">sec</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- [Section 1.7] Polygon Aggregation Label -->
+    <section id="polyAggLabelSection">
+      <div class="config-header">
+        <h2>Polygon Aggregation Label</h2>
+        <div class="header-actions-group">
+          <a href="#" id="polyAggLabelToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
+      </div>
+      <div class="config-content" style="padding-bottom: 5px;">
+        <!-- Classification Range -->
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <input type="number" id="polyAggClassBreaks" value="7" min="2" max="20" style="width: 60px;" />
+          <label for="polyAggClassBreaks">Class Breaks</label>
+        </div>
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <select id="polyAggColorRamp" style="width: 140px;">
+            <option value="blue" selected>Blue (light→dark)</option>
+            <option value="red">Red (light→dark)</option>
+            <option value="green">Green (light→dark)</option>
+            <option value="orange">Orange (light→dark)</option>
+            <option value="purple">Purple (light→dark)</option>
+            <option value="heat">Heat (yellow→red)</option>
+            <option value="spectral">Spectral (red→blue)</option>
+          </select>
+          <label for="polyAggColorRamp">Color Ramp</label>
+        </div>
+        <div class="input-row input-row-header" style="margin-bottom: 4px;">
+          <label>Fill Opacity</label>
+          <input type="range" id="polyAggFillOpacity" min="0" max="1" step="0.05" value="0.6" style="width: 120px;" />
+        </div>
+        <!-- Label Font -->
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <select id="polyAggLabelFont" style="width: 140px;">
+            <option value="arial" selected>Arial</option>
+            <option value="helvetica">Helvetica</option>
+            <option value="verdana">Verdana</option>
+            <option value="tahoma">Tahoma</option>
+            <option value="courier new">Courier New</option>
+            <option value="georgia">Georgia</option>
+            <option value="times new roman">Times New Roman</option>
+            <option value="sans-serif">Sans Serif</option>
+            <option value="serif">Serif</option>
+            <option value="monospace">Monospace</option>
+          </select>
+          <label for="polyAggLabelFont">Font</label>
+        </div>
+        <!-- Label Style -->
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <select id="polyAggLabelStyle" style="width: 140px;">
+            <option value="normal" selected>Normal</option>
+            <option value="italic">Italic</option>
+            <option value="oblique">Oblique</option>
+          </select>
+          <label for="polyAggLabelStyle">Style</label>
+        </div>
+        <!-- Label Weight -->
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <select id="polyAggLabelWeight" style="width: 140px;">
+            <option value="normal">Normal</option>
+            <option value="bold" selected>Bold</option>
+            <option value="bolder">Bolder</option>
+            <option value="lighter">Lighter</option>
+          </select>
+          <label for="polyAggLabelWeight">Weight</label>
+        </div>
+        <!-- Label Size -->
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <input type="number" id="polyAggLabelSize" value="10" min="6" max="36" style="width: 60px;" />
+          <label for="polyAggLabelSize">Size (pt)</label>
+        </div>
+        <!-- Label Color -->
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <input type="color" id="polyAggLabelColor" value="#000000" style="width: 50px; height: 24px;" />
+          <label for="polyAggLabelColor">Color</label>
+        </div>
+        <!-- Label Opacity -->
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <input type="range" id="polyAggLabelOpacity" min="0" max="1" step="0.05" value="1" style="width: 120px;" />
+          <label for="polyAggLabelOpacity">Opacity</label>
         </div>
       </div>
     </section>
@@ -492,6 +643,7 @@
     </section>
 
   </div>
+  <script src="javascript/video-overlay.js"></script>
   <script src="javascript/media-player.js"></script>
 </body>
 
