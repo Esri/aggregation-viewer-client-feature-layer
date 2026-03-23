@@ -736,6 +736,7 @@
               _layerInfo = response;
               populateDijitSelectWithLayerFields(dijit.byId('statField'), false);
               statFieldChanged(dijit.byId('statField').value); // to init-populate the stat types control
+              populateUniqueValueFieldDropdown();
             }
         );
       }
@@ -841,6 +842,83 @@
       }
 
       /**
+       * Populates the Unique Value Field dropdown in the Polygon Aggregation
+       * Settings section with the current feature layer's field names,
+       * excluding system / geometry fields.
+       * If _layerInfo is not yet available, fetches it directly.
+       */
+      function populateUniqueValueFieldDropdown() {
+        const select = dojo.byId("polyAggUniqueValueField");
+        if (!select) return;
+        console.log(_layerInfo)
+
+        if (_layerInfo && _layerInfo.fields) {
+          _fillPolyAggStatFieldDropdown(select, _layerInfo.fields);
+        } else {
+          // _layerInfo not ready yet — fetch fields directly
+          const url = dojo.byId("inputUrl").value;
+          if (!url) return;
+          esriRequest({
+            url: url,
+            handleAs: "json",
+            content: { f: "json" },
+            callbackParamName: "callback"
+          }).then(function (response) {
+            console.log(response)
+            if (response && response.fields) {
+              _fillPolyAggStatFieldDropdown(select, response.fields);
+            }
+          }, function (error) {
+            console.warn("Failed to fetch fields for Unique Value Field dropdown: " + error.message);
+          });
+        }
+      }
+
+      // Fields to exclude (lower-cased for comparison)
+      var _polyAggExcludeExact = [
+        "objectid", "globalid", "fid",
+        "geometry_json", "shape",
+        "x", "y", "z", "m",
+        "shape_length", "shape_area",
+        "shape__length", "shape__area"
+      ];
+      var _polyAggExcludePrefixes = ["bbox_"];
+      var _polyAggExcludeTypes = [
+        "esriFieldTypeOID", "esriFieldTypeGlobalID", "esriFieldTypeGeometry"
+      ];
+
+      function _fillPolyAggStatFieldDropdown(select, fields) {
+        select.innerHTML = "";
+
+        // Default placeholder option
+        var placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "-- Select a Field --";
+        select.appendChild(placeholder);
+
+        for (var i = 0; i < fields.length; i++) {
+          var field = fields[i];
+          var nameLower = field.name.toLowerCase();
+
+          // Skip by type
+          if (_polyAggExcludeTypes.indexOf(field.type) !== -1) continue;
+          // Skip by exact name
+          if (_polyAggExcludeExact.indexOf(nameLower) !== -1) continue;
+          // Skip by prefix
+          var skip = false;
+          for (var p = 0; p < _polyAggExcludePrefixes.length; p++) {
+            if (nameLower.indexOf(_polyAggExcludePrefixes[p]) === 0) { skip = true; break; }
+          }
+          if (skip) continue;
+
+          var option = document.createElement("option");
+          option.value = field.name;
+          option.textContent = field.name;
+          select.appendChild(option);
+        }
+      }
+
+      /**
        * Sends a polygonal aggregation POST request, then queries the linked
        * polygon feature layer, joins aggregation counts to the polygons,
        * and renders the result with a ClassBreaksRenderer.
@@ -851,7 +929,7 @@
        *  3. POST to the feature layer endpoint to get aggregation results
        *  4. Query the linked polygon layer for geometries
        *  5. Join aggregation counts to polygons via the selected field
-       *  6. Apply a ClassBreaksRenderer to visualise the result
+       *  6. Apply a ClassBreaksRenderer to visualize the result
        */
       function applyPolygonalAggregation() {
         // Clear both timers to prevent stacking
@@ -927,6 +1005,10 @@
         const inputUrl = dojo.byId("inputUrl").value;
         if (!inputUrl) return;
 
+        // Read the optional unique value field
+        const uvfSelect = dojo.byId("polyAggUniqueValueField");
+        const uniqueValueField = uvfSelect ? uvfSelect.value : "";
+
         // Build POST content for aggregation query
         const postContent = {
           polygonalAggType: polygonalAggType,
@@ -934,19 +1016,23 @@
           returnGeometry: false,
           f: "json"
         };
+        if (uniqueValueField) {
+          postContent.uniqueValueFields = uniqueValueField;
+        }
 
         // Save context for label-only refresh
         _polyAggContext = {
           inputUrl: inputUrl,
           polygonalAggType: polygonalAggType,
           fieldName: fieldName,
+          uniqueValueFields: uniqueValueField,
           commonFields: commonFields,
           joinFields: joinFields,
           aggTypePrefix: polygonalAggType + "."
         };
 
         console.log("Polygonal aggregation POST to: " + inputUrl + "/query");
-        console.log("  polygonalAggType=" + polygonalAggType + ", polygonalAggField=" + fieldName);
+        console.log("  polygonalAggType=" + polygonalAggType + ", polygonalAggField=" + fieldName + ", uniqueValueField=" + uniqueValueField);
 
         // Step 1: POST aggregation query to the source layer
         const aggRequest = esriRequest({
@@ -1203,6 +1289,9 @@
           returnGeometry: false,
           f: "json"
         };
+        if (ctx.uniqueValueFields) {
+          postContent.uniqueValueFields = ctx.uniqueValueFields;
+        }
 
         console.log("Label-only refresh: POST to " + ctx.inputUrl + "/query");
 

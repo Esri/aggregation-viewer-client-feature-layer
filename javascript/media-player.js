@@ -380,6 +380,10 @@
       return;
     }
 
+    if (mediaStorePanel.classList.contains('section-hidden')) {
+      return;
+    }
+
     try {
       const res = await fetch(`${HLS_VIEWER_BASE_URL}/api/tree?prefix=${encodeURIComponent(prefix)}`);
       if (!res.ok) {
@@ -607,6 +611,10 @@
   // Init — fetch CloudFront config, then load root tree level
   // ------------------------------------------------------------------
   async function init() {
+    if (mediaStorePanel.classList.contains('section-hidden')) {
+      return;
+    }
+
     // Try to get the CloudFront URL from the server config
     try {
       const res = await fetch(`${HLS_VIEWER_BASE_URL}/api/config`);
