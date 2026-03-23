@@ -831,10 +831,11 @@
         const aggInfo = _polygonalAggInfos[selectedIdx];
         if (!aggInfo.aggAttributeInfos || !Array.isArray(aggInfo.aggAttributeInfos)) return;
 
-        array.forEach(aggInfo.aggAttributeInfos, function (attrInfo) {
+        var reversed = aggInfo.aggAttributeInfos.slice().reverse();
+        array.forEach(reversed, function (attrInfo) {
           const option = document.createElement("option");
           option.value = attrInfo.fieldName;
-          option.textContent = attrInfo.fieldName + " (level " + attrInfo.level + ")";
+          option.textContent = attrInfo.level + ": " + attrInfo.fieldName;
           fieldSelect.appendChild(option);
         });
       }
