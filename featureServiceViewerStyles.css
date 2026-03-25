@@ -10,8 +10,8 @@ html, body {
 }
 
 body {
-  position: relative;
-  overflow: hidden;
+    position: relative;
+    overflow: hidden;
 }
 
 #map {
@@ -47,7 +47,7 @@ body {
 .floating-panel-content {
     max-height: 500px;
     transition: max-height 400ms cubic-bezier(0.4, 0.0, 0.2, 1),
-                padding 400ms cubic-bezier(0.4, 0.0, 0.2, 1);
+    padding 400ms cubic-bezier(0.4, 0.0, 0.2, 1);
     overflow: hidden;
 }
 
@@ -58,8 +58,9 @@ body {
 /* Media Store Archive panel */
 #media-store-panel {
     bottom: 10px;
-    left: 10px;
+    right: 310px;
     width: 320px;
+    transition: right 300ms ease;
 }
 
 #media-store-panel .floating-panel-content {
@@ -113,7 +114,7 @@ body {
 /* Video Player panel — sits to the right of Media Store Archive */
 #video-player-panel {
     bottom: 10px;
-    left: 340px;
+    left: 280px;
     width: 315px;
     transition: left 300ms ease;
 }
@@ -181,12 +182,11 @@ body {
 /* Video Layer panel — anchored to the right, next to the controls sidebar */
 #video-layer-panel {
     bottom: 10px;
-    right: 310px;
+    left: 10px;
     width: 260px;
-    transition: right 300ms ease;
 }
 
-.panel-collapsed #video-layer-panel {
+.panel-collapsed #media-store-panel {
     right: 10px;
 }
 
@@ -208,7 +208,7 @@ body {
 /* Features panel — sits to the right of Video Player */
 #features-panel {
     bottom: 10px;
-    left: 770px;
+    left: 605px;
     width: 360px;
     transition: left 300ms ease;
 }
@@ -302,31 +302,31 @@ body {
 }
 
 .panel-collapsed .collapser {
-  right: 0;
+    right: 0;
 }
 
 #expanderIcon {
-  display: none;
+    display: none;
 }
 
 .panel-collapsed #map {
-  width: calc(100% - 1px);
+    width: calc(100% - 1px);
 }
 
 .panel-collapsed #controls {
-  width: 0;
+    width: 0;
 }
 
 .panel-collapsed #controls section {
-  overflow: hidden;
+    overflow: hidden;
 }
 
 .panel-collapsed #expanderIcon {
-  display: inline-block;
+    display: inline-block;
 }
 
 .panel-collapsed #collapserIcon {
-  display: none;
+    display: none;
 }
 
 #timeSlider {
@@ -390,15 +390,15 @@ section:first-of-type .config-header {
 }
 
 .header-actions-group .dijitDropDownButton {
-  margin: 0;
+    margin: 0;
 }
 
 .header-actions-group .dijitButtonNode {
-  border: none;
+    border: none;
 }
 
 .header-actions-group .dijitArrowButtonInner {
-  display: none;
+    display: none;
 }
 
 .input-group {
@@ -454,17 +454,42 @@ section:first-of-type .config-header {
 }
 
 .input-group-checkbox-full {
-  flex-direction: row;
-  justify-content: flex-start;
+    flex-direction: row;
+    justify-content: flex-start;
 }
 
 .input-group-checkbox-full label {
-  flex: 0 0 auto;
+    flex: 0 0 auto;
 }
 
 .input-group-checkbox-full input {
-  width: min-content;
-  margin: 0;
+    width: min-content;
+    margin: 0;
+}
+
+.video-panels-checklist {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+}
+
+.video-panels-checklist .input-group.input-group-checkbox-full {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    text-align: left !important;
+    gap: 6px;
+    margin: 3px 0;
+}
+
+.video-panels-checklist .input-group.input-group-checkbox-full input[type="checkbox"] {
+    width: min-content !important;
+    margin: 0 !important;
+}
+
+.video-panels-checklist .input-group.input-group-checkbox-full label {
+    padding: 0;
+    flex: 0 0 auto;
 }
 
 .input-group-full label {
@@ -473,12 +498,12 @@ section:first-of-type .config-header {
 }
 
 .input-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  margin: 5px 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin: 5px 0;
 }
 
 .input-row .input-group {
@@ -495,7 +520,7 @@ section:first-of-type .config-header {
 }
 
 .input-row-header {
-  margin: 2px 0;
+    margin: 2px 0;
 }
 
 .input-row-header label {
@@ -516,7 +541,7 @@ section:first-of-type .config-header {
 }
 
 .input-row-header {
-  margin: 2px 0;
+    margin: 2px 0;
 }
 
 .input-row-header label {
@@ -535,31 +560,31 @@ section:first-of-type .config-header {
 }
 
 #inputUrl {
-  flex: 1 0 auto;
-  margin-right: 5px;
+    flex: 1 0 auto;
+    margin-right: 5px;
 }
 
 .flat .dijitDropDownButton .dijitButtonNode {
-  padding: 0;
-  border: none;
-  background: transparent;
+    padding: 0;
+    border: none;
+    background: transparent;
 }
 
 .flat .dijitButtonText {
-  padding: 0;
-  line-height: 0;
+    padding: 0;
+    line-height: 0;
 }
 
 .flat .dijitDownArrowButton {
-  line-height: 0;
+    line-height: 0;
 }
 
 .flat .dijitTooltipContainer {
-  border: 1px solid #B8B8B8;
-  background: #FAFAFA;
-  color: #515151;
-  box-shadow: 0 1px 4px rgba(0,0,0,.25);
-  border-radius: 2px;
+    border: 1px solid #B8B8B8;
+    background: #FAFAFA;
+    color: #515151;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    border-radius: 2px;
 }
 
 .flat .dijitTooltipContainer .input-group-full select {
@@ -575,14 +600,14 @@ section:first-of-type .config-header {
 }
 
 .flat .dijitTooltipFocusNode {
-  padding: 10px;
+    padding: 10px;
 }
 
 .flat .dijitTooltipFocusNode > div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  width: 250px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    width: 250px;
 }
 
 .flat select {
@@ -592,5 +617,5 @@ section:first-of-type .config-header {
 }
 
 .fieldTypeSelect{
-  color:#0000ff;
+    color:#0000ff;
 }

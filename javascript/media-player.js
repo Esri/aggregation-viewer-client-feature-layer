@@ -10,6 +10,7 @@
   const mediaStorePanel = document.getElementById('media-store-panel');
   const videoPlayerPanel = document.getElementById('video-player-panel');
   const featuresPanel = document.getElementById('features-panel');
+  const videoLayerPanel = document.getElementById('video-layer-panel');
 
   // CloudFront URL — fetched from the server's /api/config endpoint at startup.
   // When set, video files are loaded directly via CloudFront (no signing needed).
@@ -66,25 +67,16 @@
   // Panel toggle helpers
   // ------------------------------------------------------------------
   function updatePanelPositions() {
-    if (!videoPlayerPanel || !mediaStorePanel) return;
-    // Video Player sits to the right of Media Store
-    let videoLeft;
-    if (mediaStorePanel.classList.contains('section-hidden')) {
-      videoLeft = mediaStorePanel.offsetWidth + 20;
-    } else {
-      videoLeft = 340;
-    }
-    videoPlayerPanel.style.left = videoLeft + 'px';
+    if (!videoPlayerPanel || !videoLayerPanel) return;
+    var gap = 10;
+    // Video Player sits to the right of Video Layer
+    var vlRight = videoLayerPanel.offsetLeft + videoLayerPanel.offsetWidth;
+    videoPlayerPanel.style.left = (vlRight + gap) + 'px';
 
     // Features panel sits to the right of Video Player
     if (featuresPanel) {
-      let featuresLeft;
-      if (videoPlayerPanel.classList.contains('section-hidden')) {
-        featuresLeft = videoLeft + videoPlayerPanel.offsetWidth + 10;
-      } else {
-        featuresLeft = videoLeft + 325;
-      }
-      featuresPanel.style.left = featuresLeft + 'px';
+      var vpRight = videoPlayerPanel.offsetLeft + videoPlayerPanel.offsetWidth;
+      featuresPanel.style.left = (vpRight + gap) + 'px';
     }
   }
 
@@ -380,9 +372,9 @@
       return;
     }
 
-    if (mediaStorePanel.classList.contains('section-hidden')) {
-      return;
-    }
+    // if (mediaStorePanel.classList.contains('section-hidden')) {
+    //   return;
+    // }
 
     try {
       const res = await fetch(`${HLS_VIEWER_BASE_URL}/api/tree?prefix=${encodeURIComponent(prefix)}`);
@@ -611,9 +603,9 @@
   // Init — fetch CloudFront config, then load root tree level
   // ------------------------------------------------------------------
   async function init() {
-    if (mediaStorePanel.classList.contains('section-hidden')) {
-      return;
-    }
+    // if (mediaStorePanel.classList.contains('section-hidden')) {
+    //   return;
+    // }
 
     // Try to get the CloudFront URL from the server config
     try {

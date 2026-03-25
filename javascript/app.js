@@ -238,6 +238,43 @@
           domClass.replace(icon, isHidden ? "fa-chevron-down" : "fa-chevron-up", isHidden ? "fa-chevron-up" : "fa-chevron-down");
         }
       });
+      // Video Panels section toggle
+      const videoPanelsVisibility = { value: true };
+      on(dojo.byId("videoPanelsToggle"), "click", createSectionToggle("videoPanelsSection", "videoPanelsToggle", videoPanelsVisibility));
+
+      // Video panel checkbox toggles
+      var panelCheckboxMap = [
+        { checkbox: "toggleMediaStore",    panel: "media-store-panel" },
+        { checkbox: "toggleVideoPlayer",   panel: "video-player-panel" },
+        { checkbox: "toggleMetadataLayer", panel: "features-panel" },
+        { checkbox: "toggleVideoLayer",    panel: "video-layer-panel" }
+      ];
+      var toggleAllCheckbox = dojo.byId("toggleAllPanels");
+
+      panelCheckboxMap.forEach(function (entry) {
+        on(dojo.byId(entry.checkbox), "change", function () {
+          var panel = dojo.byId(entry.panel);
+          if (!panel) return;
+          panel.style.display = this.checked ? "" : "none";
+          // Update "Toggle All" to reflect individual states
+          var allChecked = panelCheckboxMap.every(function (e) {
+            return dojo.byId(e.checkbox).checked;
+          });
+          toggleAllCheckbox.checked = allChecked;
+        });
+      });
+
+      // Toggle All checkbox controls all four panels
+      on(toggleAllCheckbox, "change", function () {
+        var checked = this.checked;
+        panelCheckboxMap.forEach(function (entry) {
+          var cb = dojo.byId(entry.checkbox);
+          var panel = dojo.byId(entry.panel);
+          cb.checked = checked;
+          if (panel) panel.style.display = checked ? "" : "none";
+        });
+      });
+
       on(dojo.byId("applyPolyAggButton"), "click", applyPolygonalAggregation);
       on(dojo.byId("polyAggAutoRefresh"), "change", function () {
         if (!this.checked) {

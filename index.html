@@ -43,21 +43,8 @@
 <body class="flat">
   <div id="map"></div>
 
-  <!-- Floating Media Store Archive panel (temporarily hidden) -->
-  <div id="media-store-panel" class="floating-panel section-hidden" style="display:none !important;">
-    <div class="config-header">
-      <h2><i class="fa fa-database"></i> Media Store Archive</h2>
-      <div class="header-actions-group">
-        <a href="#" id="mediaStoreToggle"><i class="fa fa-chevron-down"></i></a>
-      </div>
-    </div>
-    <div class="floating-panel-content" id="mediaStoreContent">
-      <div id="tree-root"></div>
-    </div>
-  </div>
-
-  <!-- Floating Video Player panel (temporarily hidden) -->
-  <div id="video-player-panel" class="floating-panel section-hidden" style="display:none !important;">
+  <!-- Floating Video Player panel -->
+  <div id="video-player-panel" class="floating-panel section-hidden">
     <div class="config-header">
       <h2><i class="fa fa-film"></i> Video Player</h2>
       <div class="header-actions-group">
@@ -77,8 +64,21 @@
     </div>
   </div>
 
+  <!-- Floating Media Store Archive panel -->
+  <div id="media-store-panel" class="floating-panel section-hidden">
+    <div class="config-header">
+      <h2><i class="fa fa-database"></i> Media Store Archive</h2>
+      <div class="header-actions-group">
+        <a href="#" id="mediaStoreToggle"><i class="fa fa-chevron-down"></i></a>
+      </div>
+    </div>
+    <div class="floating-panel-content" id="mediaStoreContent">
+      <div id="tree-root"></div>
+    </div>
+  </div>
+
   <!-- Floating Features panel (temporarily hidden) -->
-  <div id="features-panel" class="floating-panel section-hidden" style="display:none !important;">
+  <div id="features-panel" class="floating-panel section-hidden">
     <div class="config-header">
       <h2><i class="fa fa-table"></i> Video Metadata</h2>
       <div class="header-actions-group">
@@ -110,7 +110,7 @@
   </div>
 
   <!-- Video Layer panel — hidden behind #controls, revealed when sidebar collapses (temporarily hidden) -->
-  <div id="video-layer-panel" class="floating-panel section-hidden" style="display:none !important;">
+  <div id="video-layer-panel" class="floating-panel section-hidden">
     <div class="config-header">
       <h2><i class="fa fa-video-camera"></i> Video Layer</h2>
       <div class="header-actions-group">
@@ -644,6 +644,38 @@
             <option value="replay">Replay</option>
           </select>
           <label for="refreshMode">Mode</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="videoPanelsSection">
+      <div class="config-header">
+        <h2>Video Panels</h2>
+        <div class="header-actions-group">
+          <a href="#" id="videoPanelsToggle"><i class="fa fa-chevron-up"></i></a>
+        </div>
+      </div>
+      <div class="config-content video-panels-checklist">
+        <div class="input-group input-group-checkbox-full">
+          <input type="checkbox" id="toggleAllPanels" checked />
+          <label for="toggleAllPanels"><strong>Toggle All</strong></label>
+        </div>
+        <hr style="margin:4px 0; border:none; border-top:1px solid #ccc;" />
+        <div class="input-group input-group-checkbox-full">
+          <input type="checkbox" id="toggleVideoLayer" checked />
+          <label for="toggleVideoLayer">Video Layer</label>
+        </div>
+        <div class="input-group input-group-checkbox-full">
+          <input type="checkbox" id="toggleVideoPlayer" checked />
+          <label for="toggleVideoPlayer">Video Player</label>
+        </div>
+        <div class="input-group input-group-checkbox-full">
+          <input type="checkbox" id="toggleMetadataLayer" checked />
+          <label for="toggleMetadataLayer">Video Metadata</label>
+        </div>
+        <div class="input-group input-group-checkbox-full">
+          <input type="checkbox" id="toggleMediaStore" checked />
+          <label for="toggleMediaStore">Media Store Archive</label>
         </div>
       </div>
     </section>
