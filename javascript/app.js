@@ -101,6 +101,10 @@
       // Define _isBasemapTiled with a default value
       let _isBasemapTiled = true; // Set to true if tiled basemaps are the default, otherwise false
 
+      // ### Feature service discovery ###
+      var SERVICES_URL = "https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services";
+      var featureServices = [];
+
       //#############################################################################################
       // Map Related functions
       //#############################################################################################
@@ -121,6 +125,7 @@
 
       // Build initial map with the default extent
       buildMap(initMapExtent);
+
 
       /**
        * Builds or rebuilds the map with the specified extent and current spatial reference
@@ -149,6 +154,7 @@
         _map.on("load", function () {
           console.log("Map loaded successfully.");
           setFeatureLayers();
+          fetchFeatureServices();
         });
 
         // Attach extent change handler
@@ -538,9 +544,6 @@
 
         // Fetch LOD info to populate dropdowns dynamically
         fetchLodInfo(dojo.byId("inputUrl").value);
-
-        // Fetch available FeatureServer services for dynamic layer lookup
-        fetchFeatureServices();
 
         // Auto-fetch polygonal aggregation metadata for the new layer
         fetchPolygonalAggMetadata();
@@ -2739,28 +2742,20 @@
         }
       }
 
-      // Query features for a specific time range (timestamp + duration).
-      // Uses ISO timestamp strings to query the "timestamp" field on the feature layer.
+      // ------------------------------------------------------------------
+      // Query features by hls_segment field for a specific video segment.
+      // segmentPath: e.g. "CalTrans-Camera-199/2026-03-30/16/segment00032.ts"
+      // Uses a LIKE clause: hls_segment LIKE '%CalTrans-Camera-199/2026-03-30/16/segment00032.ts'
       // Returns a Promise that resolves with an array of features.
-      // Delay (in seconds) added to the segment timestamp to account for
-      // the processing pipeline lag between video capture and feature availability.
-      var FEATURE_TIMESTAMP_DELAY_SEC = 2 * 60 + 2; // 2 min 2 sec
-      var DURATION_EXTENSION_SEC = 7; // Extend the query window beyond the segment duration to ensure we capture all features
-
-      function queryFeaturesForTimeRange(featureServiceUrl, timestamp, durationSec) {
-        var delayMs = FEATURE_TIMESTAMP_DELAY_SEC * 1000;
-        var startDate = new Date(new Date(timestamp).getTime() + delayMs);
-        var endDate = new Date(startDate.getTime() + parseFloat(durationSec) * 1000 + DURATION_EXTENSION_SEC * 1000);
-        var startTimestamp = startDate.toISOString();
-        var endTimestamp = endDate.toISOString();
-
-        var where = "timestamp >= '" + startTimestamp + "' AND timestamp < '" + endTimestamp + "'";
+      // ------------------------------------------------------------------
+      function queryFeaturesForSegment(featureServiceUrl, segmentPath) {
+        var where = "hls_segment LIKE '%" + segmentPath + "'";
 
         var outFields = [
-          'camera_id', 'frame_id', 'frame_image', 'track_id',
-          'object_class', 'bbox_x1', 'bbox_y1', 'bbox_x2', 'bbox_y2',
-          'confidence_score', 'depth_m', 'pts_ms', 'depth_raw_m',
-          'geo_confidence', 'geometry_json', 'timestamp'
+          'geo_confidence', 'bbox_y1', 'bbox_y2', 'depth_m', 'frame_id',
+          'depth_raw_m', 'bbox_x1', 'pts_ms', 'camera_id', 'frame_image',
+          'confidence_score', 'object_class', 'track_id', 'bbox_x2',
+          'hls_segment_offset_sec', 'hls_segment'
         ].join(',');
 
         var tokenParam = "";
@@ -2776,13 +2771,15 @@
             var url = featureServiceUrl + "/query"
               + "?where=" + encodeURIComponent(where)
               + "&outFields=" + encodeURIComponent(outFields)
+              + "&orderByFields=" + encodeURIComponent("frame_image")
+              + "&outSR=4326"
               + "&returnGeometry=false"
-              + "&orderByFields=" + encodeURIComponent("timestamp ASC")
+              + "&resultRecordCount=10000"
               + "&resultOffset=" + resultOffset
               + "&f=json"
               + tokenParam;
 
-            console.log("queryFeaturesForTimeRange URL (offset=" + resultOffset + "):", url);
+            console.log("queryFeaturesForSegment URL (offset=" + resultOffset + "):", url);
 
             esriRequest({
               url: url,
@@ -2795,12 +2792,12 @@
                 if (response.exceededTransferLimit === true) {
                   fetchPage(collectedFeatures.length);
                 } else {
-                  console.log("queryFeaturesForTimeRange complete: " + collectedFeatures.length + " features");
+                  console.log("queryFeaturesForSegment complete: " + collectedFeatures.length + " features");
                   resolve(collectedFeatures);
                 }
               },
               function(error) {
-                console.error("queryFeaturesForTimeRange error:", error);
+                console.error("queryFeaturesForSegment error:", error);
                 reject(error);
               }
             );
@@ -2808,6 +2805,8 @@
           fetchPage(0);
         });
       }
+
+      window.queryFeaturesForSegment = queryFeaturesForSegment;
 
       // Append one or more feature objects to the features table.
       // Accepts a single feature or an array of features.
@@ -2853,7 +2852,7 @@
 
       // Expose to global scope for media-player.js
       window.queryFeatures = queryFeatures;
-      window.queryFeaturesForTimeRange = queryFeaturesForTimeRange;
+
       window.getAllFeatures = getAllFeatures;
       window.filterFeatures = filterFeatures;
       window.selectFeaturesByRange = selectFeaturesByRange;
@@ -2865,25 +2864,26 @@
       // ------------------------------------------------------------------
       // Dynamic feature layer discovery from ArcGIS REST services endpoint
       // ------------------------------------------------------------------
-      // Dynamic feature layer discovery from ArcGIS REST services endpoint
-      // ------------------------------------------------------------------
-      var SERVICES_URL = "https://us6-iotdev.arcgis.com/dedicated/9ltepoauoaon0okn/maps/arcgis/rest/services";
-
-      // All FeatureServer services fetched from the server
-      var featureServices = [];
 
       // Fetch the services list with token from IdentityManager
       function fetchFeatureServices() {
-        var tokenParam = "";
+        console.log("Fetching feature services from:", SERVICES_URL);
+
+        var token = "";
         var credentials = IdentityManager.credentials;
         for (var i = 0; i < credentials.length; i++) {
           if (SERVICES_URL.indexOf(credentials[i].server) !== -1 && credentials[i].token) {
-            tokenParam = "&token=" + credentials[i].token;
+            token = credentials[i].token;
             break;
           }
         }
 
-        var url = SERVICES_URL + "?f=json" + tokenParam;
+        if (!token) {
+          console.warn("fetchFeatureServices: no token available yet, skipping.");
+          return;
+        }
+
+        var url = SERVICES_URL + "?f=json&token=" + token;
         var request = esriRequest({
           url: url,
           handleAs: "json",
@@ -2916,9 +2916,24 @@
           select.appendChild(opt);
         });
 
-        // Restore previous selection or match inputUrl
+        // Restore previous selection, or select the first available layer
         if (currentValue) {
           select.value = currentValue;
+        } else if (featureServices.length > 0) {
+          // Auto-select the first feature layer from the list
+          var firstLayerUrl = featureServices[0].url + "/0";
+          select.value = firstLayerUrl;
+          var inputUrl = dojo.byId("inputUrl");
+          if (inputUrl) inputUrl.value = firstLayerUrl;
+
+          console.log("------------setInputFeatureLayer------------- " + firstLayerUrl)
+          console.log(window.setMediaPlayerFeatureLayerUrl)
+
+          if (window.setMediaPlayerFeatureLayerUrl) {
+            window.setMediaPlayerFeatureLayerUrl(firstLayerUrl);
+          }
+          setFeatureLayers();
+          fetchObjectTypes(firstLayerUrl);
         } else {
           var inputUrl = dojo.byId("inputUrl");
           if (inputUrl) select.value = inputUrl.value;
@@ -2934,6 +2949,13 @@
           inputUrl.value = select.value;
         }
         setFeatureLayers();
+
+        console.log("------------setInputFeatureLayer------------- ", select.value)
+        console.log(window.setMediaPlayerFeatureLayerUrl)
+
+        if (window.setMediaPlayerFeatureLayerUrl) {
+          window.setMediaPlayerFeatureLayerUrl(select.value);
+        }
         fetchObjectTypes(select.value);
       });
 
@@ -2982,6 +3004,14 @@
         if (select) select.value = featureLayerUrl;
 
         setFeatureLayers();
+
+        // Sync the media player's feature layer URL
+        console.log("------------setInputFeatureLayer------------- " + featureLayerUrl)
+        console.log(window.setMediaPlayerFeatureLayerUrl)
+
+        if (window.setMediaPlayerFeatureLayerUrl) {
+          window.setMediaPlayerFeatureLayerUrl(featureLayerUrl);
+        }
 
         // Populate video layer object types from the new feature layer
         fetchObjectTypes(featureLayerUrl);

@@ -24,6 +24,12 @@
   // Feature layer URL resolved for the current hour-level folder
   let currentFeatureLayerUrl = null;
 
+  // Allow app.js to update the feature layer URL (e.g. when auto-selecting from dropdown)
+  window.setMediaPlayerFeatureLayerUrl = function (url) {
+    console.log("Media player feature layer URL set to:", url);
+    currentFeatureLayerUrl = url;
+  };
+
   // LRU cache for queried features: up to 10 segments
   const FEATURE_CACHE_MAX = 10;
   let featureCacheKeys = [];   // ordered from oldest to newest
@@ -31,12 +37,12 @@
 
   // Resolve feature layer URL from a prefix like media-store/video-hls/<camera-id>/<date>/<hour>/
   // Uses the dynamic lookup provided by app.js (window.resolveFeatureLayerUrl)
-  function getFeatureLayerUrl(prefix) {
-    var match = prefix.match(/^media-store\/video-hls\/([^/]+)\/([^/]+)\//);
-    if (!match) return null;
-    if (!window.resolveFeatureLayerUrl) return null;
-    return window.resolveFeatureLayerUrl(match[1], match[2]);
-  }
+  // function getFeatureLayerUrl(prefix) {
+  //   var match = prefix.match(/^media-store\/video-hls\/([^/]+)\/([^/]+)\//);
+  //   if (!match) return null;
+  //   if (!window.resolveFeatureLayerUrl) return null;
+  //   return window.resolveFeatureLayerUrl(match[1], match[2]);
+  // }
 
   // Parse an HLS playlist response into a list of [timestamp, segment, duration] triplets.
   // Skips the first 4 lines (header), then processes every 3 lines as one triplet.
@@ -59,10 +65,9 @@
   }
 
   // Video-to-feature sync parameters
-  var videoSegmentLength = 6;   // seconds per .ts segment// detection frames per second
+  var videoSegmentLength = 6;   // seconds per .ts segment
   var videoPlaySpeed = 1;       // video playback speed multiplier (e.g. 2 = 2x faster)
   var metadataRollDelay = 1;    // seconds to wait before starting metadata rolling (gives video time to load)
-
   // ------------------------------------------------------------------
   // Panel toggle helpers
   // ------------------------------------------------------------------
@@ -106,8 +111,6 @@
   // Timer ID for the rolling feature display so we can cancel on new segment
   var featureRollTimer = null;
 
-  // Timer ID for the shape drawing loop (separate from metadata rolling)
-  var shapeDrawTimer = null;
 
   // ------------------------------------------------------------------
   // selectFeaturesForSegment — sync video segment to feature display
@@ -126,21 +129,28 @@
 
     var segName = segMatch[1];
     var triplet = segmentTriplets[segName];
-    if (!triplet) {
-      console.warn("No triplet found for segment:", segName);
-      return;
-    }
 
-    var timestamp = triplet[0];
-    var duration = triplet[2];
-    console.log("Segment " + segName + ": querying features for timestamp=" + timestamp + ", duration=" + duration);
+    // Extract segment path for hls_segment query:
+    // key = "media-store/video-hls/CalTrans-Camera-199/2026-03-30/16/segment00032.ts"
+    // segmentPath = "CalTrans-Camera-199/2026-03-30/16/segment00032.ts"
+    var pathMatch = key.match(/media-store\/video-hls\/(.+\.ts)$/);
+    var segmentPath = pathMatch ? pathMatch[1] : null;
+
+    var duration = triplet ? triplet[2] : videoSegmentLength;
+
+    console.log("Segment " + segName + ": segmentPath=" + segmentPath);
 
     // Clear table and video overlay for this segment
     if (window.clearFeaturesTable) window.clearFeaturesTable();
     if (window.videoOverlay) window.videoOverlay.clearOverlay();
 
-    if (!currentFeatureLayerUrl || !window.queryFeaturesForTimeRange) {
-      console.warn("No feature layer URL or queryFeaturesForTimeRange not available");
+    if (!currentFeatureLayerUrl) {
+      console.warn("No feature layer URL available");
+      return;
+    }
+
+    if (!segmentPath || !window.queryFeaturesForSegment) {
+      console.warn("No segment path or queryFeaturesForSegment not available");
       return;
     }
 
@@ -156,8 +166,8 @@
       return;
     }
 
-    // Query features on-demand for this segment's time range
-    window.queryFeaturesForTimeRange(currentFeatureLayerUrl, timestamp, duration)
+    // Query features by hls_segment field
+    window.queryFeaturesForSegment(currentFeatureLayerUrl, segmentPath)
       .then(function (features) {
         if (!features || features.length === 0) {
           console.log("No features found for segment " + segName);
@@ -197,8 +207,8 @@
       batchSize: batchSize
     };
 
-    // Group features by timestamp for shape drawing
-    var frameGroups = groupFeaturesByTimestamp(features);
+    // Group features by frame for shape drawing
+    var frameGroups = groupFeaturesByFrame(features);
 
     // Delay the start of both rolling and shape drawing
     featureRollTimer = setTimeout(function () {
@@ -207,89 +217,85 @@
       scheduleNextFeature();
     }, metadataRollDelay * 1000);
 
-    // Start shape drawing loop in parallel
-    startShapeDrawLoop(frameGroups, durationSec);
+    // Start shape drawing loop synced to video.currentTime
+    startShapeDrawLoop(frameGroups);
   }
 
   // ------------------------------------------------------------------
-  // Group features by their timestamp attribute into ordered frames
-  // Returns an array of { timestamp, features } objects
+  // Group features by frame_image into ordered frames.
+  // Each group has: { timestamp (epoch ms), offsetSec (hls_segment_offset_sec), features }
+  // Features are expected to arrive ordered by frame_image from the query.
   // ------------------------------------------------------------------
-  function groupFeaturesByTimestamp(features) {
+  function groupFeaturesByFrame(features) {
     var map = {};
     var order = [];
     features.forEach(function (f) {
-      var ts = (f.attributes && f.attributes.timestamp) || "";
-      if (!map[ts]) {
-        map[ts] = [];
-        order.push(ts);
+      var a = f.attributes || {};
+      var key = a.frame_image || a.timestamp || "";
+      if (!map[key]) {
+        map[key] = { features: [], timestamp: a.timestamp, offsetSec: a.hls_segment_offset_sec };
+        order.push(key);
       }
-      map[ts].push(f);
+      map[key].features.push(f);
     });
-    return order.map(function (ts) {
-      return { timestamp: ts, features: map[ts] };
+    return order.map(function (k) {
+      return map[k];
     });
   }
 
   // ------------------------------------------------------------------
-  // Shape drawing loop — draws all shapes for one frame (same timestamp)
-  // at a time, paced to finish within the segment duration.
+  // Shape drawing loop — uses requestAnimationFrame to sync bounding
+  // boxes with the video's actual currentTime.
+  // Matches video.currentTime + syncOffset against each frame group's
+  // hls_segment_offset_sec to find the closest detection frame.
   // ------------------------------------------------------------------
-  var shapeDrawState = null; // { frameGroups, currentFrame, end, intervalMs }
+  var shapeDrawState = null; // { frameGroups, lastDrawnFrame, rafId }
 
-  function startShapeDrawLoop(frameGroups, durationSec) {
+  function startShapeDrawLoop(frameGroups) {
     stopShapeDraw();
     if (!frameGroups || frameGroups.length === 0) return;
 
-    var availableMs = Math.max(100, (durationSec - metadataRollDelay) * 1000);
-    var intervalMs = availableMs / frameGroups.length;
-
     shapeDrawState = {
       frameGroups: frameGroups,
-      currentFrame: 0,
-      end: frameGroups.length,
-      intervalMs: intervalMs
+      lastDrawnFrame: -1,
+      rafId: null
     };
 
-    shapeDrawTimer = setTimeout(function () {
-      if (!shapeDrawState) return;
-      drawCurrentFrame();
-      scheduleNextFrame();
-    }, metadataRollDelay * 1000);
+    shapeDrawState.rafId = requestAnimationFrame(shapeDrawTick);
   }
 
-  function drawCurrentFrame() {
-    if (!shapeDrawState || shapeDrawState.currentFrame >= shapeDrawState.end) return;
-    var group = shapeDrawState.frameGroups[shapeDrawState.currentFrame];
-    shapeDrawState.currentFrame++;
+  function shapeDrawTick() {
+    if (!shapeDrawState) return;
 
-    if (window.videoOverlay) {
-      window.videoOverlay.clearOverlay();
-      window.videoOverlay.drawFeatures(group.features);
-    }
-  }
+    var groups = shapeDrawState.frameGroups;
+    var currentTime = video ? video.currentTime : 0;
 
-  function scheduleNextFrame() {
-    if (!shapeDrawState || shapeDrawState.currentFrame >= shapeDrawState.end) {
-      shapeDrawTimer = null;
-      return;
-    }
-    var adjustedMs = shapeDrawState.intervalMs / videoPlaySpeed;
-
-    shapeDrawTimer = setTimeout(function () {
-      if (!shapeDrawState || shapeDrawState.currentFrame >= shapeDrawState.end) {
-        shapeDrawTimer = null;
-        return;
+    // Find the frame group with the closest hls_segment_offset_sec to video.currentTime
+    var bestIdx = -1;
+    var bestDist = Infinity;
+    for (var i = 0; i < groups.length; i++) {
+      var dist = Math.abs(groups[i].offsetSec - currentTime);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
       }
-      drawCurrentFrame();
-      scheduleNextFrame();
-    }, adjustedMs);
+    }
+
+    // Only redraw when the matched frame changes
+    if (bestIdx >= 0 && bestIdx !== shapeDrawState.lastDrawnFrame) {
+      shapeDrawState.lastDrawnFrame = bestIdx;
+      if (window.videoOverlay) {
+        window.videoOverlay.clearOverlay();
+        window.videoOverlay.drawFeatures(groups[bestIdx].features);
+      }
+    }
+
+    shapeDrawState.rafId = requestAnimationFrame(shapeDrawTick);
   }
 
   function stopShapeDraw() {
-    if (shapeDrawTimer) {
-      clearTimeout(shapeDrawTimer);
-      shapeDrawTimer = null;
+    if (shapeDrawState && shapeDrawState.rafId) {
+      cancelAnimationFrame(shapeDrawState.rafId);
     }
     shapeDrawState = null;
   }
@@ -333,12 +339,21 @@
     stopShapeDraw();
   }
 
-  // Pause rolling only when the user explicitly pauses (not when the video ends naturally).
-  // When the video ends, let the rolling continue so all features are displayed.
+  // Pause/resume: pause the shape drawing RAF loop and metadata rolling
+  // when the user explicitly pauses (not when the video ends naturally).
   if (video) {
     video.addEventListener('pause', function () {
       if (!video.ended) {
-        stopFeatureRoll();
+        // Pause metadata rolling
+        if (featureRollTimer) {
+          clearTimeout(featureRollTimer);
+          featureRollTimer = null;
+        }
+        // Pause shape drawing RAF loop
+        if (shapeDrawState && shapeDrawState.rafId) {
+          cancelAnimationFrame(shapeDrawState.rafId);
+          shapeDrawState.rafId = null;
+        }
       }
     });
     video.addEventListener('play', function () {
@@ -346,9 +361,9 @@
       if (rollState && rollState.currentIndex < rollState.end && !featureRollTimer) {
         scheduleNextFeature();
       }
-      // Resume shape drawing if there are remaining frames
-      if (shapeDrawState && shapeDrawState.currentFrame < shapeDrawState.end && !shapeDrawTimer) {
-        scheduleNextFrame();
+      // Resume shape drawing RAF loop
+      if (shapeDrawState && !shapeDrawState.rafId) {
+        shapeDrawState.rafId = requestAnimationFrame(shapeDrawTick);
       }
     });
   }
@@ -417,7 +432,7 @@
           });
 
           // Resolve and store the feature layer URL for this camera/date
-          currentFeatureLayerUrl = getFeatureLayerUrl(prefix);
+          //currentFeatureLayerUrl = getFeatureLayerUrl(prefix);
           console.log("Feature layer URL:", currentFeatureLayerUrl);
         } catch (err) {
           console.error("Failed to load playlist:", err);
