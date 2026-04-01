@@ -120,12 +120,14 @@
   // State for the rolling display so pause/resume can continue where it left off
   var rollState = null;  // { start, end, currentIndex, baseIntervalMs }
 
+  // Returns a Promise that resolves once features are loaded, interpolated,
+  // and the shape draw loop is ready. playFile awaits this before starting video.
   function selectFeaturesForSegment(key) {
     // Cancel any previous rolling display
     stopFeatureRoll();
 
     var segMatch = key.match(/(segment\d+)\.ts$/);
-    if (!segMatch) return;
+    if (!segMatch) return Promise.resolve();
 
     var segName = segMatch[1];
     var triplet = segmentTriplets[segName];
@@ -146,12 +148,12 @@
 
     if (!currentFeatureLayerUrl) {
       console.warn("No feature layer URL available");
-      return;
+      return Promise.resolve();
     }
 
     if (!segmentPath || !window.queryFeaturesForSegment) {
       console.warn("No segment path or queryFeaturesForSegment not available");
-      return;
+      return Promise.resolve();
     }
 
     // Sync the input URL and dropdown to match the metadata feature layer
@@ -163,11 +165,11 @@
     if (featureCache[segName]) {
       console.log("Cache hit for segment " + segName + ": " + featureCache[segName].length + " features");
       startFeatureRoll(featureCache[segName], duration);
-      return;
+      return Promise.resolve();
     }
 
     // Query features by hls_segment field
-    window.queryFeaturesForSegment(currentFeatureLayerUrl, segmentPath)
+    return window.queryFeaturesForSegment(currentFeatureLayerUrl, segmentPath)
       .then(function (features) {
         if (!features || features.length === 0) {
           console.log("No features found for segment " + segName);
@@ -193,6 +195,11 @@
   // Fixed tick interval (ms) for rolling; batch size adjusts to fit the duration
   var rollTickMs = 100;
 
+  // Bbox interpolation: when enabled, generates intermediate frames between
+  // detection frames to smooth bbox movement up to the target FPS.
+  var INTERPOLATION_ENABLED = false;
+  var INTERPOLATION_TARGET_FPS = 15;
+
   function startFeatureRoll(features, duration) {
     var durationSec = parseFloat(duration) || videoSegmentLength;
     // Subtract the roll delay so rolling finishes in sync with the video
@@ -207,8 +214,11 @@
       batchSize: batchSize
     };
 
-    // Group features by frame for shape drawing
+    // Group features by frame, optionally interpolate to fill gaps
     var frameGroups = groupFeaturesByFrame(features);
+    var interpolated = INTERPOLATION_ENABLED
+      ? interpolateFrameGroups(frameGroups, INTERPOLATION_TARGET_FPS)
+      : frameGroups;
 
     // Delay the start of both rolling and shape drawing
     featureRollTimer = setTimeout(function () {
@@ -217,8 +227,9 @@
       scheduleNextFeature();
     }, metadataRollDelay * 1000);
 
-    // Start shape drawing loop synced to video.currentTime
-    startShapeDrawLoop(frameGroups);
+    // Start shape drawing loop with interpolated frames
+    startShapeDrawLoop(interpolated);
+
   }
 
   // ------------------------------------------------------------------
@@ -244,12 +255,87 @@
   }
 
   // ------------------------------------------------------------------
+  // Interpolate between detection frame groups to produce smooth bbox
+  // movement at targetFps. Uses track_id to match objects across
+  // consecutive frames and linearly interpolates bbox coordinates.
+  // ------------------------------------------------------------------
+  function interpolateFrameGroups(frameGroups, targetFps) {
+    if (frameGroups.length < 2) return frameGroups;
+
+    var intervalSec = 1.0 / targetFps;
+    var result = [];
+
+    for (var g = 0; g < frameGroups.length - 1; g++) {
+      var curr = frameGroups[g];
+      var next = frameGroups[g + 1];
+      result.push(curr); // always include the original frame
+
+      var gap = next.offsetSec - curr.offsetSec;
+      if (gap <= intervalSec) continue; // no room to interpolate
+
+      // Build a lookup of next frame's features by track_id
+      var nextByTrack = {};
+      next.features.forEach(function (f) {
+        var tid = f.attributes && f.attributes.track_id;
+        if (tid != null) nextByTrack[tid] = f;
+      });
+
+      // Find matchable features (present in both frames by track_id)
+      var matchable = [];
+      curr.features.forEach(function (f) {
+        var tid = f.attributes && f.attributes.track_id;
+        if (tid != null && nextByTrack[tid]) {
+          matchable.push({ curr: f, next: nextByTrack[tid] });
+        }
+      });
+
+      if (matchable.length === 0) continue; // no tracks to interpolate
+
+      // Generate intermediate frames
+      var steps = Math.floor(gap / intervalSec);
+      for (var s = 1; s < steps; s++) {
+        var t = s / steps; // interpolation factor 0..1
+        var interpOffsetSec = curr.offsetSec + gap * t;
+        var interpFeatures = [];
+
+        matchable.forEach(function (pair) {
+          var ca = pair.curr.attributes;
+          var na = pair.next.attributes;
+          interpFeatures.push({
+            attributes: {
+              bbox_x1: ca.bbox_x1 + (na.bbox_x1 - ca.bbox_x1) * t,
+              bbox_y1: ca.bbox_y1 + (na.bbox_y1 - ca.bbox_y1) * t,
+              bbox_x2: ca.bbox_x2 + (na.bbox_x2 - ca.bbox_x2) * t,
+              bbox_y2: ca.bbox_y2 + (na.bbox_y2 - ca.bbox_y2) * t,
+              object_class: ca.object_class,
+              confidence_score: ca.confidence_score,
+              geo_confidence: ca.geo_confidence,
+              track_id: ca.track_id,
+              _interpolated: true
+            }
+          });
+        });
+
+        result.push({
+          offsetSec: interpOffsetSec,
+          features: interpFeatures,
+          interpolated: true
+        });
+      }
+    }
+
+    // Add the last original frame
+    result.push(frameGroups[frameGroups.length - 1]);
+    return result;
+  }
+
+  // ------------------------------------------------------------------
   // Shape drawing loop — uses requestAnimationFrame to sync bounding
   // boxes with the video's actual currentTime.
   // Matches video.currentTime + syncOffset against each frame group's
   // hls_segment_offset_sec to find the closest detection frame.
   // ------------------------------------------------------------------
-  var BBOX_DISPLAY_DURATION_MS = 250; // clear bboxes after this many ms if no new frame arrives
+  var BBOX_DISPLAY_DURATION_MS = 0; // set > 0 to auto-clear bboxes after this many ms if no new frame arrives (0 = disabled)
   var shapeDrawState = null; // { frameGroups, lastDrawnFrame, lastDrawnTime, rafId, clearTimer }
 
   function startShapeDrawLoop(frameGroups) {
@@ -292,11 +378,13 @@
         window.videoOverlay.clearOverlay();
         window.videoOverlay.drawFeatures(groups[bestIdx].features);
       }
-      // Reset the auto-clear timer
-      if (shapeDrawState.clearTimer) clearTimeout(shapeDrawState.clearTimer);
-      shapeDrawState.clearTimer = setTimeout(function () {
-        if (window.videoOverlay) window.videoOverlay.clearOverlay();
-      }, BBOX_DISPLAY_DURATION_MS / videoPlaySpeed);
+      // Auto-clear timer: clear bboxes if no new frame arrives within the duration
+      if (BBOX_DISPLAY_DURATION_MS > 0) {
+        if (shapeDrawState.clearTimer) clearTimeout(shapeDrawState.clearTimer);
+        shapeDrawState.clearTimer = setTimeout(function () {
+          if (window.videoOverlay) window.videoOverlay.clearOverlay();
+        }, BBOX_DISPLAY_DURATION_MS / videoPlaySpeed);
+      }
     }
 
     shapeDrawState.rafId = requestAnimationFrame(shapeDrawTick);
@@ -549,18 +637,19 @@
           video.play();
         }
       } else if (name.endsWith('.ts')) {
-        resetUI(name, key, "video-badge video-badge-segment", "Playing Single Segment");
-        selectFeaturesForSegment(key);
+        resetUI(name, key, "video-badge video-badge-segment", "Loading features...");
+        // Load video but don't play yet — wait for features to be ready
         if (Hls.isSupported()) {
           const dummyManifest = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:6.0,\n" + videoUrl + "\n#EXT-X-ENDLIST";
           hls = new Hls();
           hls.loadSource(URL.createObjectURL(new Blob([dummyManifest], {type: 'application/x-mpegURL'})));
           hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
         } else {
           video.src = videoUrl;
-          video.play();
         }
+        await selectFeaturesForSegment(key);
+        resetUI(name, key, "video-badge video-badge-segment", "Playing Single Segment");
+        video.play();
       } else {
         resetUI(name, key, "video-badge video-badge-direct", "Direct Playback");
         video.src = videoUrl;
@@ -600,18 +689,19 @@
         const videoUrl = data.url;
 
         if (name.endsWith('.ts')) {
-          resetUI(name, key, "video-badge video-badge-segment", "Playing Single Segment");
-          selectFeaturesForSegment(key);
+          resetUI(name, key, "video-badge video-badge-segment", "Loading features...");
+          // Load video but don't play yet — wait for features to be ready
           if (Hls.isSupported()) {
             const dummyManifest = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:6.0,\n" + videoUrl + "\n#EXT-X-ENDLIST";
             hls = new Hls();
             hls.loadSource(URL.createObjectURL(new Blob([dummyManifest], {type: 'application/x-mpegURL'})));
             hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
           } else {
             video.src = videoUrl;
-            video.play();
           }
+          await selectFeaturesForSegment(key);
+          resetUI(name, key, "video-badge video-badge-segment", "Playing Single Segment");
+          video.play();
         } else {
           resetUI(name, key, "video-badge video-badge-direct", "Direct Playback");
           video.src = videoUrl;

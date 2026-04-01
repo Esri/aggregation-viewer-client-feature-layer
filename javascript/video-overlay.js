@@ -37,10 +37,16 @@
       objectShape:     (document.getElementById("videoObjectShape") || {}).value || "bbox",
       geoConfidence:   (document.getElementById("videoGeoConfidence") || {}).value || "all",
       confidenceScore: parseFloat((document.getElementById("videoConfidenceScore") || {}).value) || 0,
+      shapeEnabled:    (document.getElementById("videoShapeEnabled") || {}).checked !== false,
       strokeColor:     (document.getElementById("videoStrokeColor") || {}).value || "#FF0000",
       strokeWidth:     parseInt((document.getElementById("videoStrokeWidth") || {}).value, 10) || 2,
       fillColor:       (document.getElementById("videoFillColor") || {}).value || "#FF0000",
-      fillOpacity:     parseFloat((document.getElementById("videoFillOpacity") || {}).value) || 0.2
+      fillOpacity:     parseFloat((document.getElementById("videoFillOpacity") || {}).value) || 0.2,
+      labelEnabled:    (document.getElementById("videoLabelEnabled") || {}).checked !== false,
+      labelFontSize:   parseInt((document.getElementById("videoLabelFontSize") || {}).value, 10) || 10,
+      labelColor:      (document.getElementById("videoLabelColor") || {}).value || "#FFFFFF",
+      labelBgColor:    (document.getElementById("videoLabelBgColor") || {}).value || "#000000",
+      labelBgOpacity:  parseFloat((document.getElementById("videoLabelBgOpacity") || {}).value || "0")
     };
   }
 
@@ -93,18 +99,37 @@
     if (features.length > 0) {
       var s = features[0].attributes || {};
       console.log("videoOverlay: first feature bbox:", s.bbox_x1, s.bbox_y1, s.bbox_x2, s.bbox_y2,
-        "frame_image:", s.frame_image);
+        "frame_image:", s.frame_image, features.length);
     }
+
+    // Interpolated features use a distinct color (yellow by default)
+    var interpStrokeColor = opts.interpStrokeColor || "#FFFF00";
+    var interpFillRgba = hexToRgba(opts.interpFillColor || "#FFFF00", opts.fillOpacity);
 
     features.forEach(function (f) {
       var a = f.attributes || {};
       if (!passesFilter(a, opts)) return;
 
+      var stroke = a._interpolated ? interpStrokeColor : opts.strokeColor;
+      var fill = a._interpolated ? interpFillRgba : fillRgba;
+
       if (opts.objectShape === "segmentation" && a.geometry_json) {
-        drawPolygon(svg, a.geometry_json, opts.strokeColor, opts.strokeWidth, fillRgba);
+        if (opts.shapeEnabled) {
+          drawPolygon(svg, a.geometry_json, stroke, opts.strokeWidth, fill);
+        }
+        if (opts.labelEnabled && a.bbox_x1 != null && a.bbox_y1 != null) {
+          var segLabel = (a.object_class || "?") + " (" + (a.confidence_score != null ? a.confidence_score.toFixed(2) : "?") + ")";
+          drawLabel(svg, Math.min(a.bbox_x1, a.bbox_x2 || a.bbox_x1), Math.min(a.bbox_y1, a.bbox_y2 || a.bbox_y1), segLabel, opts);
+        }
         drawn++;
       } else if (a.bbox_x1 != null && a.bbox_y1 != null && a.bbox_x2 != null && a.bbox_y2 != null) {
-        drawBBox(svg, a.bbox_x1, a.bbox_y1, a.bbox_x2, a.bbox_y2, opts.strokeColor, opts.strokeWidth, fillRgba);
+        if (opts.shapeEnabled) {
+          drawBBox(svg, a.bbox_x1, a.bbox_y1, a.bbox_x2, a.bbox_y2, stroke, opts.strokeWidth, fill);
+        }
+        if (opts.labelEnabled) {
+          var label = (a.object_class || "?") + " (" + (a.confidence_score != null ? a.confidence_score.toFixed(2) : "?") + ")";
+          drawLabel(svg, Math.min(a.bbox_x1, a.bbox_x2), Math.min(a.bbox_y1, a.bbox_y2), label, opts);
+        }
         drawn++;
       }
     });
@@ -137,6 +162,38 @@
     rect.setAttribute("stroke-width", strokeWidth);
     rect.setAttribute("fill", fillColor);
     svg.appendChild(rect);
+  }
+
+  // ------------------------------------------------------------------
+  // Draw a label above the top-left corner of a bounding box
+  // ------------------------------------------------------------------
+  function drawLabel(svg, x, y, text, opts) {
+    var fontSize = opts.labelFontSize;
+    var padding = 2;
+    // Estimate background width based on character count
+    var bgWidth = text.length * fontSize * 0.6 + padding * 2;
+    var bgHeight = fontSize + padding * 2;
+    var bgY = y - bgHeight;
+
+    // Background rectangle behind the text
+    var bg = document.createElementNS(SVG_NS, "rect");
+    bg.setAttribute("x", x);
+    bg.setAttribute("y", bgY);
+    bg.setAttribute("width", bgWidth);
+    bg.setAttribute("height", bgHeight);
+    bg.setAttribute("fill", hexToRgba(opts.labelBgColor, opts.labelBgOpacity));
+    bg.setAttribute("rx", 1);
+    svg.appendChild(bg);
+
+    // Text element
+    var label = document.createElementNS(SVG_NS, "text");
+    label.setAttribute("x", x + padding);
+    label.setAttribute("y", bgY + fontSize + padding * 0.5);
+    label.setAttribute("fill", opts.labelColor);
+    label.setAttribute("font-size", fontSize);
+    label.setAttribute("font-family", "Arial, sans-serif");
+    label.textContent = text;
+    svg.appendChild(label);
   }
 
   // ------------------------------------------------------------------
