@@ -249,7 +249,8 @@
   // Matches video.currentTime + syncOffset against each frame group's
   // hls_segment_offset_sec to find the closest detection frame.
   // ------------------------------------------------------------------
-  var shapeDrawState = null; // { frameGroups, lastDrawnFrame, rafId }
+  var BBOX_DISPLAY_DURATION_MS = 250; // clear bboxes after this many ms if no new frame arrives
+  var shapeDrawState = null; // { frameGroups, lastDrawnFrame, lastDrawnTime, rafId, clearTimer }
 
   function startShapeDrawLoop(frameGroups) {
     stopShapeDraw();
@@ -258,7 +259,9 @@
     shapeDrawState = {
       frameGroups: frameGroups,
       lastDrawnFrame: -1,
-      rafId: null
+      lastDrawnTime: 0,
+      rafId: null,
+      clearTimer: null
     };
 
     shapeDrawState.rafId = requestAnimationFrame(shapeDrawTick);
@@ -284,18 +287,25 @@
     // Only redraw when the matched frame changes
     if (bestIdx >= 0 && bestIdx !== shapeDrawState.lastDrawnFrame) {
       shapeDrawState.lastDrawnFrame = bestIdx;
+      shapeDrawState.lastDrawnTime = performance.now();
       if (window.videoOverlay) {
         window.videoOverlay.clearOverlay();
         window.videoOverlay.drawFeatures(groups[bestIdx].features);
       }
+      // Reset the auto-clear timer
+      if (shapeDrawState.clearTimer) clearTimeout(shapeDrawState.clearTimer);
+      shapeDrawState.clearTimer = setTimeout(function () {
+        if (window.videoOverlay) window.videoOverlay.clearOverlay();
+      }, BBOX_DISPLAY_DURATION_MS / videoPlaySpeed);
     }
 
     shapeDrawState.rafId = requestAnimationFrame(shapeDrawTick);
   }
 
   function stopShapeDraw() {
-    if (shapeDrawState && shapeDrawState.rafId) {
-      cancelAnimationFrame(shapeDrawState.rafId);
+    if (shapeDrawState) {
+      if (shapeDrawState.rafId) cancelAnimationFrame(shapeDrawState.rafId);
+      if (shapeDrawState.clearTimer) clearTimeout(shapeDrawState.clearTimer);
     }
     shapeDrawState = null;
   }
