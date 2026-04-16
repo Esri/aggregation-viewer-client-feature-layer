@@ -1,0 +1,14 @@
+.git
+.gitignore
+.idea
+.claude
+.vscode
+.DS_Store
+*.md
+*.iml
+node_modules
+hls-viewer
+caltrans-camera-276-2026-03-05-22.json
+unified_hexagonal_earth_theory.md
+Dockerfile
+.dockerignore
