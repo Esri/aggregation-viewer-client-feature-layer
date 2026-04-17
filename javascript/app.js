@@ -516,9 +516,12 @@
           lodSelect.appendChild(opt);
         }
 
-        // Default to the midpoint of the allowed level range
-        var midLevel = Math.round((min + max) / 2);
-        lodSelect.value = String(midLevel);
+        // Default LOD level per type; fall back to midpoint
+        var defaultLevels = { pointyHexagon: 18, square: 17 };
+        var defaultLevel = defaultLevels[selectedType] || Math.round((min + max) / 2);
+        // Clamp to valid range
+        defaultLevel = Math.max(min, Math.min(max, defaultLevel));
+        lodSelect.value = String(defaultLevel);
       }
 
       /**
@@ -1271,7 +1274,7 @@
                 // Schedule auto-refresh if enabled (separate rates for polygons and labels)
                 if (dojo.byId("polyAggAutoRefresh").checked) {
                   _polyAggAutoRefresh = true;
-                  var intervalSec = parseFloat(dojo.byId("polyAggRefreshInterval").value) || 5;
+                  var intervalSec = parseFloat(dojo.byId("polyAggRefreshInterval").value) || 1;
                   // Polygon rendering refreshes at 10x the user-set interval
                   clearTimeout(_polyAggPolygonRefreshInterval);
                   _polyAggPolygonRefreshInterval = setTimeout(applyPolygonalAggregation, intervalSec * 10 * 1000);
@@ -1425,7 +1428,7 @@
 
               // Schedule next label-only refresh
               if (dojo.byId("polyAggAutoRefresh").checked) {
-                var intervalSec = parseFloat(dojo.byId("polyAggRefreshInterval").value) || 5;
+                var intervalSec = parseFloat(dojo.byId("polyAggRefreshInterval").value) || 1;
                 clearTimeout(_polyAggLabelRefreshInterval);
                 _polyAggLabelRefreshInterval = setTimeout(refreshPolyAggLabelsOnly, intervalSec * 1000);
               }
@@ -1488,7 +1491,7 @@
           return new SimpleFillSymbol()
             .setColor(color)
             .setOutline(
-              new SimpleLineSymbol().setColor(new Color([99, 99, 99, 1])).setWidth(0.5)
+              new SimpleLineSymbol().setColor(new Color([20, 20, 20, 1])).setWidth(1.5)
             );
         }
 
@@ -1858,13 +1861,13 @@
         // define default symbol
         const symbol = new SimpleFillSymbol();
         symbol.setColor(new Color([150, 150, 150, 0.3]))
-          .setOutline(new SimpleLineSymbol().setColor(new Color("white")).setWidth(0.3));
+          .setOutline(new SimpleLineSymbol().setColor(new Color([20, 20, 20, 1])).setWidth(1.5));
         // function to create symbol for breaks with a given color
         function createSymbol(color) {
           return new SimpleFillSymbol()
             .setColor(color)
             .setOutline(
-              new SimpleLineSymbol().setColor(new Color([99, 99, 99, 1])).setWidth(0.3)
+              new SimpleLineSymbol().setColor(new Color([20, 20, 20, 1])).setWidth(1.0)
             );
         };
         const classColorInfo = [];
@@ -2401,7 +2404,7 @@
             // Schedule LOD auto-refresh if enabled
             if (dojo.byId("lodAutoRefresh").checked) {
               _lodAutoRefresh = true;
-              var intervalSec = parseFloat(dojo.byId("lodRefreshInterval").value) || 5;
+              var intervalSec = parseFloat(dojo.byId("lodRefreshInterval").value) || 1;
               clearTimeout(_lodRefreshInterval);
               _lodRefreshInterval = setTimeout(updateLayerFromUIChange, intervalSec * 1000);
             }

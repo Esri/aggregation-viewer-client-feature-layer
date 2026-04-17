@@ -228,12 +228,12 @@
         <!-- Select Basemap -->
         <div title="Select Base Map" class="input-group input-group-full">
           <select id="basemapUrl" name="basemapUrl" style="width: 120px;">
-            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer">Topographic</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer" >Topographic</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer">Streets</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer">National Geographic</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer">Light Gray Canvas</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer">Dark Gray Canvas</option>
-            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer">Imagery</option>
+            <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer" selected="selected">Imagery</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Terrain_Base/MapServer">Terrain</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/World_Shaded_Relief/MapServer">Shaded Relief</option>
             <option value="https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Transportation/MapServer">Transportation</option>
@@ -304,7 +304,7 @@
         <div class="input-row" style="display:flex; align-items:center;">
           <input type="checkbox" id="polyAggAutoRefresh" />
           <label for="polyAggAutoRefresh" style="margin-right:10px;">Auto refresh</label>
-          <input type="number" id="polyAggRefreshInterval" value="5" style="width:50px;" />
+          <input type="number" id="polyAggRefreshInterval" value="1" style="width:50px;" />
           <label for="polyAggRefreshInterval">sec</label>
         </div>
       </div>
@@ -418,7 +418,7 @@
         <div class="input-row" style="display:flex; align-items:center;">
           <input type="checkbox" id="lodAutoRefresh" />
           <label for="lodAutoRefresh" style="margin-right:10px;">Auto refresh</label>
-          <input type="number" id="lodRefreshInterval" value="5" style="width:50px;" />
+          <input type="number" id="lodRefreshInterval" value="1" style="width:50px;" />
           <label for="lodRefreshInterval">sec</label>
         </div>
       </div>
@@ -435,12 +435,12 @@
       <div title="LOD Aggregation Type" class="config-content" style="padding-bottom: 5px;">
         <div class="input-group input-group-full">
           <select name="lodType" id="lodType" style="width: 120px;">
-            <option value="geohash" selected="selected">GeoHash</option>
+            <option value="geohash">GeoHash</option>
             <option value="geotile">GeoTile</option>
             <option value="h3">H3</option>
             <option value="square">Square</option>
             <option value="flatHexagon">Flat Hexagon</option>
-            <option value="pointyHexagon">Pointy Hexagon</option>
+            <option value="pointyHexagon" selected="selected">Pointy Hexagon</option>
             <option value="flatTriangle">Flat Triangle</option>
             <option value="pointyTriangle">Pointy Triangle</option>
           </select>
