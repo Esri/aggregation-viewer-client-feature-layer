@@ -1201,10 +1201,15 @@
               // Build composite key from the linked feature's common fields
               const keyParts = [];
               array.forEach(commonFields, function (cf) {
-                keyParts.push(feature.attributes[cf] || "");
+                var val = feature.attributes[cf];
+                keyParts.push(val !== undefined && val !== null ? val : "");
               });
               const key = keyParts.join("|");
               const aggCount = aggLookup[key] || 0;
+              if (aggCount === 0) {
+                console.warn("polyAgg join: no match for key [" + key + "], commonFields=" + JSON.stringify(commonFields) +
+                  ", linked attrs=" + JSON.stringify(feature.attributes));
+              }
 
               const attrs = {};
               array.forEach(joinFields, function (jf) {
