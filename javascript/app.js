@@ -32,12 +32,14 @@
       "esri/symbols/SimpleLineSymbol",
       "esri/symbols/SimpleFillSymbol",
       "esri/symbols/TextSymbol",
+      "esri/symbols/PictureMarkerSymbol",
       "esri/geometry/Polygon",
 
       "esri/dijit/TimeSlider",
 
       "esri/renderers/HeatmapRenderer",
       "esri/renderers/ClassBreaksRenderer",
+      "esri/renderers/SimpleRenderer",
 
       "dijit/layout/BorderContainer",
       "dijit/layout/ContentPane",
@@ -53,9 +55,9 @@
       Map, Graphic, SpatialReference, Color, esriRequest, webMercatorUtils, Extent, GeometryService, InfoTemplate, TimeExtent, graphicsUtils,
       IdentityManager,
       FeatureLayer, GraphicsLayer, LabelClass, ArcGISDynamicMapServiceLayer, ArcGISTiledMapServiceLayer,
-      SimpleLineSymbol, SimpleFillSymbol, TextSymbol, Polygon,
+      SimpleLineSymbol, SimpleFillSymbol, TextSymbol, PictureMarkerSymbol, Polygon,
       TimeSlider,
-      HeatmapRenderer, ClassBreaksRenderer,
+      HeatmapRenderer, ClassBreaksRenderer, SimpleRenderer,
       BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton, Select) {
 
       parser.parse();
@@ -155,6 +157,8 @@
           console.log("Map loaded successfully.");
           setFeatureLayers();
           fetchFeatureServices();
+          addCameraFovLayer();
+          addCameraLayer();
         });
 
         // Attach extent change handler
@@ -557,6 +561,99 @@
           addHeatmapLayer();
           updateLayerFromUIChange(true);
         });
+      }
+
+      /**
+       * Adds the corridor 197–276 camera FOV polygon feature layer to the map.
+       * Renders each polygon with a transparent fill and a 2-pt dashed orange outline.
+       */
+      function addCameraFovLayer() {
+        // "https://services.arcgis.com/hRUr1F8lE8Jq2uJo/arcgis/rest/services/corridor_camera_fov_197_to_276/FeatureServer/0";
+        const fovLayerUrl = "https://services.arcgis.com/hRUr1F8lE8Jq2uJo/arcgis/rest/services/camera_197_to_276_fov_1/FeatureServer/0";
+        const existing = _map.getLayer("cameraFovLayer");
+        if (existing) {
+          _map.removeLayer(existing);
+        }
+
+        const orange = new Color([255, 140, 0, 1]);
+        const fovOutline = new SimpleLineSymbol(SimpleLineSymbol.STYLE_DASH, orange, 2);
+        const fovFill = new SimpleFillSymbol(SimpleFillSymbol.STYLE_NULL, fovOutline, new Color([0, 0, 0, 0]));
+
+        const fovLayer = new FeatureLayer(fovLayerUrl, {
+          id: "cameraFovLayer",
+          outFields: ["*"],
+          mode: FeatureLayer.MODE_ONDEMAND
+        });
+        fovLayer.setRenderer(new SimpleRenderer(fovFill));
+        fovLayer.setMinScale(0);
+        fovLayer.setMaxScale(0);
+
+        fovLayer.on("error", function (err) {
+          console.log("Camera FOV layer load error: " + (err && err.error && err.error.message));
+        });
+
+        _map.addLayer(fovLayer);
+        console.log("Camera FOV layer added: " + fovLayerUrl);
+      }
+
+      /**
+       * Adds the corridor 197–276 cameras point feature layer to the map.
+       * Renders each point with an inline SVG traffic-camera symbol and labels
+       * the points with the "Alias" field.
+       */
+      function addCameraLayer() {
+        const cameraLayerUrl = "https://services.arcgis.com/hRUr1F8lE8Jq2uJo/arcgis/rest/services/corridor_197_to_276_cameras/FeatureServer/0";
+
+        // Remove any previously added camera layer (e.g., after SR change rebuilds the map)
+        const existing = _map.getLayer("cameraLayer");
+        if (existing) {
+          _map.removeLayer(existing);
+        }
+
+        const cameraSvg =
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
+          '<rect x="3" y="9" width="18" height="14" rx="2" fill="#FF8C00" stroke="white" stroke-width="2"/>' +
+          '<polygon points="21,12 29,8 29,24 21,20" fill="#FF8C00" stroke="white" stroke-width="2"/>' +
+          '<circle cx="10" cy="16" r="3.5" fill="white"/>' +
+          '<circle cx="10" cy="16" r="1.5" fill="#FF8C00"/>' +
+          '</svg>';
+        const cameraDataUri = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(cameraSvg);
+        const cameraSymbol = new PictureMarkerSymbol(cameraDataUri, 32, 32);
+
+        const aliasTextSymbol = new TextSymbol().setColor(new Color([0, 0, 0, 1]));
+        aliasTextSymbol.font.setFamily("arial");
+        // aliasTextSymbol.font.setSize("12pt");
+        aliasTextSymbol.font.setSize("9pt");
+        aliasTextSymbol.font.setWeight("bold");
+        aliasTextSymbol.setHaloColor(new Color([255, 255, 255, 1]));
+        aliasTextSymbol.setHaloSize(2);
+        aliasTextSymbol.setAlign("center");
+        aliasTextSymbol.setVerticalAlignment("top");
+        aliasTextSymbol.setOffset(0, 0);
+
+        const aliasLabelClass = new LabelClass({
+          labelExpressionInfo: { value: "{alias}" },
+          labelPlacement: "below-center"
+        });
+        aliasLabelClass.symbol = aliasTextSymbol;
+
+        const cameraLayer = new FeatureLayer(cameraLayerUrl, {
+          id: "cameraLayer",
+          outFields: ["alias"],
+          showLabels: true,
+          mode: FeatureLayer.MODE_ONDEMAND
+        });
+        cameraLayer.setRenderer(new SimpleRenderer(cameraSymbol));
+        cameraLayer.setLabelingInfo([aliasLabelClass]);
+        cameraLayer.setMinScale(0);
+        cameraLayer.setMaxScale(0);
+
+        cameraLayer.on("error", function (err) {
+          console.log("Camera layer load error: " + (err && err.error && err.error.message));
+        });
+
+        _map.addLayer(cameraLayer);
+        console.log("Camera layer added: " + cameraLayerUrl);
       }
 
       /**
@@ -1186,6 +1283,7 @@
               id: "polyAggResult",
               objectIdField: "objectid",
               showLabels: true,
+              showLabels: true,
               infoTemplate: resultInfoTemplate,
               outFields: ["*"]
             });
@@ -1268,8 +1366,10 @@
                       textSymbol.font.setSize(palSize + "pt");
                       textSymbol.font.setStyle(palStyle);
                       textSymbol.font.setWeight(palWeight);
-                      textSymbol.setHaloColor(new Color([255, 255, 255, 0.7]));
-                      textSymbol.setHaloSize(1);
+                      textSymbol.setHaloColor(new Color([255, 255, 255, 1]));
+                      textSymbol.setHaloSize(2);
+                      textSymbol.setAlign("center");
+                      textSymbol.setVerticalAlignment("middle");
                       polyAggLabelsLayer.add(new Graphic(labelPoint, textSymbol));
                     });
                     _map.addLayer(polyAggLabelsLayer);
@@ -1424,8 +1524,10 @@
                 textSymbol.font.setSize(palSize + "pt");
                 textSymbol.font.setStyle(palStyle);
                 textSymbol.font.setWeight(palWeight);
-                textSymbol.setHaloColor(new Color([255, 255, 255, 0.7]));
-                textSymbol.setHaloSize(1);
+                textSymbol.setHaloColor(new Color([255, 255, 255, 1]));
+                textSymbol.setHaloSize(2);
+                textSymbol.setAlign("center");
+                textSymbol.setVerticalAlignment("middle");
                 polyAggLabelsLayer.add(new Graphic(labelPoint, textSymbol));
               });
               _map.addLayer(polyAggLabelsLayer);
