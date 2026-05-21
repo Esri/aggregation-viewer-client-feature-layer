@@ -164,17 +164,31 @@
         // Attach extent change handler
         attachMapExtentChangeHandler();
 
-        // Add the basemap
+        // Add the basemap. Use the tiled layer only when the map SR is Web Mercator
+        // (wkid 102100) — that's the only SR the arcgisonline tile services publish in,
+        // and only deterministic /tile/{z}/{y}/{x} URLs are browser-cacheable. For any
+        // other SR fall back to the dynamic export layer (uncached, but reprojected).
         const basemapUrl = dom.byId("basemapUrl").value;
-        let basemapLayer;
-        basemapLayer = new ArcGISDynamicMapServiceLayer(basemapUrl, {
-          "showAttribution": false,
-          "opacity": 1.0
-        });
-        _map.addLayers([basemapLayer]);
+        const mapWkid = mapExtent && mapExtent.spatialReference
+          ? mapExtent.spatialReference.wkid
+          : _wkid;
+        _isBasemapTiled = (mapWkid === 102100);
 
-        // only the first map built is tiled
-        _isBasemapTiled = false;
+        let basemapLayer;
+        if (_isBasemapTiled) {
+          basemapLayer = new ArcGISTiledMapServiceLayer(basemapUrl, {
+            id: "basemap",
+            showAttribution: false,
+            opacity: 1.0
+          });
+        } else {
+          basemapLayer = new ArcGISDynamicMapServiceLayer(basemapUrl, {
+            id: "basemap",
+            showAttribution: false,
+            opacity: 1.0
+          });
+        }
+        _map.addLayers([basemapLayer]);
       }
 
       /**
@@ -569,7 +583,8 @@
        */
       function addCameraFovLayer() {
         // "https://services.arcgis.com/hRUr1F8lE8Jq2uJo/arcgis/rest/services/corridor_camera_fov_197_to_276/FeatureServer/0";
-        const fovLayerUrl = "https://services.arcgis.com/hRUr1F8lE8Jq2uJo/arcgis/rest/services/camera_197_to_276_fov_1/FeatureServer/0";
+        // const fovLayerUrl = "https://services.arcgis.com/hRUr1F8lE8Jq2uJo/arcgis/rest/services/camera_197_to_276_fov_1/FeatureServer/0";
+        const fovLayerUrl = "https://services.arcgis.com/hRUr1F8lE8Jq2uJo/ArcGIS/rest/services/camera_187_276_viewsheds_100m/FeatureServer/0"
         const existing = _map.getLayer("cameraFovLayer");
         if (existing) {
           _map.removeLayer(existing);
