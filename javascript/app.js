@@ -319,6 +319,7 @@
       on(dojo.byId("aggLabelsToggle"), "click", createSectionToggle("aggLabelsMainSection", "aggLabelsToggle", aggLabelsVisibility));
 
       on(dojo.byId("setLayerButton"), "click", setFeatureLayers);
+      on(dojo.byId("refreshFeatureLayersButton"), "click", fetchFeatureServices);
       on(dojo.byId("heatmap"), "change", toggleHeatmap);
       on(dojo.byId("refreshMode"), "change", toggleMode);
       on(dojo.byId("autoOffSet"), "change", toggleRefresh);
@@ -825,6 +826,60 @@
             "spatialReference": { "wkid": wkid }
           });
           buildMap(defaultExtent);
+        });
+      }
+
+      /**
+       * Fetches a feature layer's metadata and zooms the map to its extent.
+       * If the layer's extent is in a different spatial reference than the map,
+       * projects it to the map SR first using GeometryService.
+       */
+      function zoomToLayerExtent(layerUrl) {
+        if (!layerUrl || !_map) return;
+
+        esriRequest({
+          url: layerUrl,
+          content: { f: "json" },
+          handleAs: "json",
+          callbackParamName: "callback"
+        }).then(function (response) {
+          if (!response || !response.extent) {
+            console.log("zoomToLayerExtent: layer has no extent metadata");
+            return;
+          }
+          var ext = response.extent;
+          if (ext.xmin == null || ext.xmax == null ||
+              ext.xmin === ext.xmax || ext.ymin === ext.ymax) {
+            console.log("zoomToLayerExtent: degenerate extent, skipping zoom");
+            return;
+          }
+
+          var layerExtent = new Extent({
+            xmin: ext.xmin, ymin: ext.ymin,
+            xmax: ext.xmax, ymax: ext.ymax,
+            spatialReference: ext.spatialReference
+          });
+
+          var layerWkid = ext.spatialReference.wkid || ext.spatialReference.latestWkid;
+          var mapWkid = _map.spatialReference.wkid;
+          // 102100 and 3857 are both Web Mercator — treat as equivalent
+          var sameSR = layerWkid === mapWkid ||
+                       (layerWkid === 102100 && mapWkid === 3857) ||
+                       (layerWkid === 3857 && mapWkid === 102100);
+
+          if (sameSR) {
+            _map.setExtent(layerExtent, true);
+          } else {
+            _gs.project([layerExtent], _map.spatialReference).then(function (results) {
+              if (results && results.length > 0) {
+                _map.setExtent(results[0], true);
+              }
+            }, function (err) {
+              console.log("zoomToLayerExtent: project to map SR failed:", err);
+            });
+          }
+        }, function (err) {
+          console.log("zoomToLayerExtent: failed to fetch layer metadata:", err);
         });
       }
 
@@ -3074,6 +3129,7 @@
           inputUrl.value = select.value;
         }
         setFeatureLayers();
+        zoomToLayerExtent(select.value);
 
         console.log("------------setInputFeatureLayer------------- ", select.value)
         console.log(window.setMediaPlayerFeatureLayerUrl)
