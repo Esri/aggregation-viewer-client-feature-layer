@@ -317,6 +317,7 @@
           updateLayerFromUIChange();
         }
       });
+      on(dojo.byId("lodUniqueValueField"), "change", toggleRefresh);
       on(dojo.byId("aggLabelsToggle"), "click", createSectionToggle("aggLabelsMainSection", "aggLabelsToggle", aggLabelsVisibility));
 
       on(dojo.byId("setLayerButton"), "click", setFeatureLayers);
@@ -1059,14 +1060,18 @@
        * If _layerInfo is not yet available, fetches it directly.
        */
       function populateUniqueValueFieldDropdown() {
-        const select = dojo.byId("polyAggUniqueValueField");
-        if (!select) return;
+        const polySelect = dojo.byId("polyAggUniqueValueField");
+        const lodSelect = dojo.byId("lodUniqueValueField");
         console.log(_layerInfo)
 
+        function fillBoth(fields) {
+          if (polySelect) _fillPolyAggStatFieldDropdown(polySelect, fields);
+          if (lodSelect) _fillPolyAggStatFieldDropdown(lodSelect, fields);
+        }
+
         if (_layerInfo && _layerInfo.fields) {
-          _fillPolyAggStatFieldDropdown(select, _layerInfo.fields);
+          fillBoth(_layerInfo.fields);
         } else {
-          // _layerInfo not ready yet — fetch fields directly
           const url = dojo.byId("inputUrl").value;
           if (!url) return;
           esriRequest({
@@ -1077,7 +1082,7 @@
           }).then(function (response) {
             console.log(response)
             if (response && response.fields) {
-              _fillPolyAggStatFieldDropdown(select, response.fields);
+              fillBoth(response.fields);
             }
           }, function (error) {
             console.warn("Failed to fetch fields for Unique Value Field dropdown: " + error.message);
@@ -2348,6 +2353,11 @@
         if (_layerInfo && _layerInfo.geometryType && _layerInfo.geometryType === "esriGeometryPoint") {
           const ext = encodeURIComponent(JSON.stringify(_map.extent.toJson()));
           url += "&geometryType=esriGeometryEnvelope&geometry=" + ext;
+        }
+
+        var lodUvf = dojo.byId("lodUniqueValueField");
+        if (lodUvf && lodUvf.value) {
+          url += "&uniqueValueFields=" + encodeURIComponent(lodUvf.value);
         }
 
         url += "&f=pjson";
