@@ -33,6 +33,7 @@
       "esri/symbols/SimpleFillSymbol",
       "esri/symbols/TextSymbol",
       "esri/symbols/PictureMarkerSymbol",
+      "esri/geometry/Point",
       "esri/geometry/Polygon",
 
       "esri/dijit/TimeSlider",
@@ -55,7 +56,7 @@
       Map, Graphic, SpatialReference, Color, esriRequest, webMercatorUtils, Extent, GeometryService, InfoTemplate, TimeExtent, graphicsUtils,
       IdentityManager,
       FeatureLayer, GraphicsLayer, LabelClass, ArcGISDynamicMapServiceLayer, ArcGISTiledMapServiceLayer,
-      SimpleLineSymbol, SimpleFillSymbol, TextSymbol, PictureMarkerSymbol, Polygon,
+      SimpleLineSymbol, SimpleFillSymbol, TextSymbol, PictureMarkerSymbol, Point, Polygon,
       TimeSlider,
       HeatmapRenderer, ClassBreaksRenderer, SimpleRenderer,
       BorderContainer, ContentPane, TitlePane, TooltipDialog, DropDownButton, Select) {
@@ -1407,10 +1408,8 @@
                 resultLayer.refresh();
                 console.log("Polygonal aggregation result layer added: " + graphics.length + " polygon features.");
 
-                // Use GeometryService.labelPoints to compute interior label points for all polygons
                 var geometries = array.map(graphics, function (g) { return g.geometry; });
                 if (geometries.length > 0 && geometries[0].rings.length > 0) {
-                  // Read label settings from Polygon Aggregation Label panel
                   var palFont = (dojo.byId("polyAggLabelFont") || {}).value || "arial";
                   var palStyle = (dojo.byId("polyAggLabelStyle") || {}).value || "normal";
                   var palWeight = (dojo.byId("polyAggLabelWeight") || {}).value || "bold";
@@ -1419,12 +1418,11 @@
                   var palOpacity = parseFloat((dojo.byId("polyAggLabelOpacity") || {}).value);
                   if (isNaN(palOpacity)) palOpacity = 1;
 
-                  // Parse hex color to RGB
                   var palR = parseInt(palColorHex.slice(1, 3), 16);
                   var palG = parseInt(palColorHex.slice(3, 5), 16);
                   var palB = parseInt(palColorHex.slice(5, 7), 16);
 
-                  _gs.labelPoints(geometries).then(function (labelPts) {
+                  function addPolyAggLabels(labelPts) {
                     var polyAggLabelsLayer = new GraphicsLayer({ id: "polyAggLabels" });
                     array.forEach(labelPts, function (labelPoint, i) {
                       if (!labelPoint) return;
@@ -1443,7 +1441,19 @@
                       polyAggLabelsLayer.add(new Graphic(labelPoint, textSymbol));
                     });
                     _map.addLayer(polyAggLabelsLayer);
-                  });
+                  }
+
+                  var labelMethod = (dojo.byId("polyAggLabelMethod") || {}).value || "geometryService";
+                  if (labelMethod === "centerline" && window.computeCenterlineLabelPoints) {
+                    var ringsArray = array.map(geometries, function (g) { return g.rings; });
+                    var rawPts = window.computeCenterlineLabelPoints(ringsArray);
+                    var labelPts = array.map(rawPts, function (pt) {
+                      return new Point(pt[0], pt[1], mapSR);
+                    });
+                    addPolyAggLabels(labelPts);
+                  } else {
+                    _gs.labelPoints(geometries).then(addPolyAggLabels);
+                  }
                 }
 
                 // Schedule auto-refresh if enabled (separate rates for polygons and labels)
@@ -1577,7 +1587,7 @@
           var palB = parseInt(palColorHex.slice(5, 7), 16);
 
           if (geometries.length > 0 && geometries[0].rings && geometries[0].rings.length > 0) {
-            _gs.labelPoints(geometries).then(function (labelPts) {
+            function addRefreshedLabels(labelPts) {
               var polyAggLabelsLayer = new GraphicsLayer({ id: "polyAggLabels" });
               array.forEach(labelPts, function (labelPoint, i) {
                 if (!labelPoint) return;
@@ -1603,13 +1613,25 @@
               _map.addLayer(polyAggLabelsLayer);
               console.log("Label-only refresh complete: " + labelPts.length + " labels updated.");
 
-              // Schedule next label-only refresh
               if (dojo.byId("polyAggAutoRefresh").checked) {
                 var intervalSec = parseFloat(dojo.byId("polyAggRefreshInterval").value) || 1;
                 clearTimeout(_polyAggLabelRefreshInterval);
                 _polyAggLabelRefreshInterval = setTimeout(refreshPolyAggLabelsOnly, intervalSec * 1000);
               }
-            });
+            }
+
+            var labelMethod = (dojo.byId("polyAggLabelMethod") || {}).value || "geometryService";
+            if (labelMethod === "centerline" && window.computeCenterlineLabelPoints) {
+              var mapSR = new SpatialReference(_map.spatialReference.wkid);
+              var ringsArray = array.map(geometries, function (g) { return g.rings; });
+              var rawPts = window.computeCenterlineLabelPoints(ringsArray);
+              var labelPts = array.map(rawPts, function (pt) {
+                return new Point(pt[0], pt[1], mapSR);
+              });
+              addRefreshedLabels(labelPts);
+            } else {
+              _gs.labelPoints(geometries).then(addRefreshedLabels);
+            }
           }
         }, function (error) {
           console.log("Error in label-only refresh: " + error.message);

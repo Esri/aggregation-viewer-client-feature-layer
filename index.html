@@ -37,6 +37,20 @@
   <script src="https://use.fontawesome.com/9482a0b1d1.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="https://js.arcgis.com/3.46/"></script>
+  <script>
+    // d3-delaunay's UMD wrapper detects AMD (from Dojo/ArcGIS) and skips
+    // the global path. Temporarily hide define.amd so it falls through
+    // to the global `d3` assignment instead.
+    window.__savedAmd = window.define && window.define.amd;
+    if (window.define) window.define.amd = undefined;
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6.0.4/dist/d3-delaunay.min.js"></script>
+  <script>
+    if (window.__savedAmd) window.define.amd = window.__savedAmd;
+    delete window.__savedAmd;
+  </script>
+  <script src="javascript/polylabel.js"></script>
+  <script src="javascript/centerline.js"></script>
   <script src="javascript/app.js"></script>
 </head>
 
@@ -320,6 +334,13 @@
         </div>
       </div>
       <div class="config-content" style="padding-bottom: 5px;">
+        <div class="input-group input-group-full" style="margin-bottom: 4px;">
+          <select id="polyAggLabelMethod" style="width: 140px;">
+            <option value="geometryService">GeometryService</option>
+            <option value="centerline" selected>Centerline</option>
+          </select>
+          <label for="polyAggLabelMethod">Label Point Method</label>
+        </div>
         <!-- Classification Range -->
         <div class="input-group input-group-full" style="margin-bottom: 4px;">
           <input type="number" id="polyAggClassBreaks" value="7" min="2" max="20" style="width: 60px;" />
